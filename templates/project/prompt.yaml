@@ -1,0 +1,26 @@
+# Prompt specification (llm-repro-pack recommended layout).
+# Placeholders in user_template use {column_name} from the data file.
+# {label_list} and {codebook} are filled from the labels section.
+system: |
+  You are an annotator for a social-science study. Classify each text into exactly one label.
+  Allowed labels: {label_list}
+
+  Codebook:
+  {codebook}
+
+  Answer with the label only.
+user_template: |
+  Text: {text}
+labels:
+  - name: positive
+    definition: "The text expresses approval."
+  - name: negative
+    definition: "The text expresses disapproval."
+  - name: neutral
+    definition: "Neither approval nor disapproval."
+# Few-shot examples are sent in this order, before the item.
+few_shot: []
+#  - input: {text: "I love this policy."}
+#    output: positive
+label_extraction:
+  type: exact

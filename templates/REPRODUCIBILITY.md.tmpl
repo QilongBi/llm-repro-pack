@@ -1,0 +1,45 @@
+# Reproducibility statement
+
+## Grade: ${grade}
+
+${grade_meaning}
+
+${grade_reason}
+
+| Grade | Conditions | What can be reproduced |
+|---|---|---|
+| A | Fully open model, self-run, all critical fields locked | Bit-identical on the same hardware class |
+| B | Open-weight model, self-run, all critical fields locked | Bit-identical on the same hardware class |
+| C | Some critical fields missing, or hosted API mode | Statistical reproduction (agreement metrics) |
+| D | Only archived outputs available | Downstream analysis only |
+
+A field is *locked* when its provenance is `run_time_evidence`, `researcher_provided`,
+`code_declared` or `researcher_confirmed`, its value is known, and no conflict is open.
+
+## Missing or unlocked critical fields
+
+${missing_critical}
+
+## How to raise the grade
+
+${how_to_improve}
+
+## Recommended fields not captured
+
+${missing_recommended}
+
+## Conflicts between evidence sources
+
+${conflicts}
+
+## Values inferred by the packaging agent
+
+${inferred}
+
+## Caveats
+
+${caveats}
+
+## Provenance summary
+
+${provenance_summary}

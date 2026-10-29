@@ -1,0 +1,25 @@
+# Model profile: AI2 OLMo 2 (fully open). Eligible for grade A.
+name: olmo2
+description: "AI2 OLMo 2 models. Weights, training data, training code and checkpoints are public."
+match:
+  - "allenai/olmo-2-*"
+  - "olmo2*"
+  - "olmo-2*"
+openness: fully_open
+license: apache-2.0
+license_restrictions: "Apache-2.0. Check the model card for dataset-specific terms."
+training_data_disclosed: true
+default_extraction_rule:
+  type: exact
+fields: {}
+# Reference values for the openness record. They are hints only: they enter the
+# manifest as claude_inferred and the researcher must confirm them against the model card.
+hints:
+  "allenai/olmo-2-1124-7b-instruct":
+    model.training_data: "Pretraining OLMo-mix-1124; mid-training Dolmino-mix-1124; post-training Tulu 3 mixtures (SFT, DPO, RLVR) as listed on the model card."
+    model.training_data_version: "OLMo-mix-1124, Dolmino-mix-1124, Tulu 3 OLMo 2 mixtures (see model card for exact dataset revisions)."
+    model.checkpoint: "Released final Instruct checkpoint at the recorded revision."
+    model.training_code_repo: "allenai/OLMo (pretraining) and allenai/open-instruct (post-training)."
+notes:
+  - "Record the training code commit from the model card or the OLMo / open-instruct release tags. The profile does not supply it."
+  - "Instruct variants use the Tulu chat template stored in tokenizer_config.json."

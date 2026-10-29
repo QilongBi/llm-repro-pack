@@ -1,0 +1,5 @@
+pyyaml>=6.0
+# Optional, only to re-run models:
+# transformers, torch, vllm, huggingface_hub
+# Tests:
+# pytest

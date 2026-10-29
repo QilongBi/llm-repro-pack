@@ -1,0 +1,23 @@
+# Fallback profile for models without a dedicated profile.
+# Copy this file to profiles/<name>.yaml to add a new model family.
+name: default
+description: "Generic open-weight model."
+match: []
+openness: open_weight
+training_data_disclosed: false
+default_extraction_rule:
+  type: exact
+fields: {}
+# Field spec reference (all keys optional):
+#   <field_name>:
+#     critical: true|false        # counts toward grades A/B
+#     description: "..."
+#     allowed: [..]               # allowed values
+#     keys: [..]                  # JSON/YAML keys that carry the value in configs, logs, requests
+#     patterns: [..]              # regexes with one capture group, applied to code and logs
+#     detect: [{pattern, value}]  # fixed value when a regex matches code
+#     default: X                  # model default, enters as claude_inferred
+#     default_basis: "..."
+#     template_kwarg: name        # passed to apply_chat_template / chat_template_kwargs
+#     ollama_option: name         # passed as a top-level Ollama /api/chat option
+notes: []

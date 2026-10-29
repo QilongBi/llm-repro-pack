@@ -1,0 +1,7 @@
+#!/usr/bin/env sh
+# Reproduce this package with its archived scripts.
+# Usage: sh scripts/reproduce.sh --engine <transformers|vllm|ollama|hosted_api> [--sample N] [--rebuild]
+set -eu
+HERE="$(cd "$(dirname "$0")" && pwd)"
+PYTHON="${PYTHON:-python3}"
+exec "$PYTHON" "$HERE/reproduce.py" --package "$HERE/.." "$@"

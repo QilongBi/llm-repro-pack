@@ -1,0 +1,37 @@
+# Run configuration (llm-repro-pack recommended layout).
+# Fill in what you used. Leave a value out rather than guessing.
+run_mode: self_run            # self_run | hosted_api
+task:
+  type: single_label          # single_label | multi_label
+  multi_label_separator: ";"
+model:
+  repo_id: allenai/OLMo-2-1124-7B-Instruct
+  revision: ""                # 40-character commit hash
+  format: original            # original | gguf | mlx | ollama | other
+  quantization: none
+engine:
+  name: vllm                  # transformers | vllm | ollama | mlx | llama.cpp
+decoding:
+  temperature: 0.0
+  top_p: 1.0
+  top_k: -1
+  seed: 0
+  max_tokens: 16
+  batch_size: 32
+  batch_invariant: false
+  precision: bfloat16
+data:
+  path: data/items.csv
+  id_column: id
+  text_column: text
+outputs:
+  labels: outputs/labels.csv
+  id_column: id
+  label_column: label
+  raw_outputs: outputs/raw_outputs.jsonl
+# Hosted API mode only. Never put the key itself here.
+hosted_api:
+  provider: ""
+  base_url: ""
+  model_name: ""
+  api_key_env: ""

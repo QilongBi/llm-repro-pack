@@ -1,0 +1,17 @@
+# Model profile: Meta Llama (open-weight, custom license).
+name: llama
+description: "Meta Llama 3.x and later. Open weights under the Llama Community License."
+match:
+  - "meta-llama/*"
+  - "llama3*"
+  - "llama-3*"
+openness: open_weight
+license: "llama community license (version per model)"
+license_restrictions: "Llama Community License: acceptable use policy, attribution, and a separate license above 700M monthly active users. Do not archive weights in packages."
+training_data_disclosed: false
+redistribution_allowed: false
+default_extraction_rule:
+  type: exact
+fields: {}
+notes:
+  - "Gated repository. Later researchers need to accept the license on Hugging Face before downloading."

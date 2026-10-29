@@ -1,0 +1,23 @@
+# Model profile: Qwen3 (open-weight) with switchable thinking mode.
+name: qwen3
+description: "Qwen3 models. The chat template has a thinking switch that changes the rendered input."
+match:
+  - "qwen/qwen3-*"
+  - "qwen3*"
+openness: open_weight
+training_data_disclosed: false
+default_extraction_rule:
+  type: exact
+fields:
+  enable_thinking:
+    critical: true
+    description: "Value of the enable_thinking chat-template switch."
+    keys: [enable_thinking]
+    patterns:
+      - 'enable_thinking["\x27]?\s*[:=]\s*["\x27]?(True|False|true|false)'
+    default: true
+    default_basis: "The Qwen3 chat template enables thinking unless enable_thinking=False is passed."
+    template_kwarg: enable_thinking
+notes:
+  - "Read the license from the model card. Qwen licenses differ between model sizes."
+  - "When thinking is on, extract the label after the closing </think> tag."

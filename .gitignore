@@ -1,0 +1,37 @@
+# Model weights
+*.safetensors
+*.gguf
+*.bin
+*.pt
+*.pth
+*.ckpt
+*.onnx
+*.h5
+weights/
+
+# Large data files
+*.parquet
+*.feather
+*.arrow
+*.zip
+*.tar
+*.tar.gz
+data/
+
+# Secrets
+.env
+.env.*
+*.pem
+*.key
+endpoints.json
+secrets.*
+
+# Local state and build output
+.llmrp/
+*-repro-pack/
+reproduction/
+__pycache__/
+*.pyc
+.pytest_cache/
+.venv/
+venv/

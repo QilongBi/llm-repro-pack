@@ -1,0 +1,56 @@
+# Model profile: OpenAI gpt-oss (open-weight). Maximum grade B.
+name: gpt-oss
+description: "OpenAI gpt-oss-20b / gpt-oss-120b, open-weight MoE models using the harmony chat format."
+match:
+  - "openai/gpt-oss-*"
+  - "gpt-oss*"
+  - "*/gpt-oss-*"
+openness: open_weight
+license: apache-2.0
+license_restrictions: "Apache-2.0, plus the gpt-oss usage policy published with the model."
+training_data_disclosed: false
+# MoE weights are released in MXFP4. This is the original format, not a user conversion.
+native_quantization: mxfp4
+default_extraction_rule:
+  type: harmony_final
+  then: {type: exact}
+fields:
+  reasoning_effort:
+    critical: true
+    description: "Reasoning effort level set in the system message (low, medium, high)."
+    allowed: [low, medium, high]
+    keys: [reasoning_effort, effort, think]
+    patterns:
+      - 'reasoning_effort["\x27]?\s*[:=]\s*["\x27]?(low|medium|high)'
+      - 'Reasoning:\s*(low|medium|high)'
+      - '"effort"\s*:\s*"(low|medium|high)"'
+    default: medium
+    default_basis: "gpt-oss uses medium reasoning effort when none is set."
+    template_kwarg: reasoning_effort
+    ollama_option: think
+  chat_format:
+    critical: true
+    description: "Chat format used to build the prompt."
+    default: harmony
+    default_basis: "gpt-oss is trained on the harmony response format only."
+  harmony_rendering:
+    critical: true
+    description: "How harmony was rendered: openai-harmony library, tokenizer chat template, or engine built-in."
+    detect:
+      - {pattern: 'openai_harmony|load_harmony_encoding', value: "openai-harmony library"}
+      - {pattern: 'apply_chat_template', value: "tokenizer chat template (HF)"}
+      - {pattern: 'from vllm|vllm serve|LLM\(', value: "engine built-in (vLLM)"}
+      - {pattern: '\bollama\b', value: "engine built-in (Ollama)"}
+      - {pattern: 'chat/completions|from openai import', value: "provider-side (hosted API)"}
+  reasoning_trace_archived:
+    critical: false
+    description: "Whether the analysis-channel reasoning trace was archived with the outputs."
+  label_extraction_channel:
+    critical: true
+    description: "Channel used to read the label (final channel expected)."
+    default: final
+    default_basis: "harmony places the user-facing answer in the final channel."
+notes:
+  - "MXFP4 kernels need recent GPUs (e.g. Hopper/Blackwell with recent engines). Older GPUs and Apple Silicon dequantize to bf16, so numerics differ across hardware. Treat cross-hardware runs as statistical reproduction."
+  - "Reasoning traces change with reasoning effort. Record the effort level and archive the analysis channel."
+  - "Extract labels from the final channel only. Never parse a label out of the reasoning trace."

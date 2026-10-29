@@ -1,0 +1,65 @@
+# Reproducibility package: ${title}
+
+Built by ${tool} ${tool_version} on ${created_at}.
+
+| Item | Value |
+|---|---|
+| Model | `${repo_id}` @ `${revision}` |
+| Openness | ${openness} |
+| Run mode | ${run_mode} |
+| Engine | ${engine} |
+| Hardware | ${hardware} |
+| Items | ${n_items} |
+| **Reproducibility grade** | **${grade}** (${grade_meaning}) |
+
+See `REPRODUCIBILITY.md` for missing items, conflicts and caveats. Every value in
+`manifest.yaml` carries a provenance label and a source.
+
+## Contents
+
+```
+manifest.yaml        every captured field with value, provenance and source
+REPRODUCIBILITY.md   grade, missing items, conflicts, caveats
+env/                 environment files and hardware info
+prompts/             prompt files and rendered model inputs
+scripts/             archived runner, adapters, reproduce and compare scripts
+outputs/             archived labels and raw outputs
+logs/                run logs
+data/                input data, or access instructions if it cannot be shared
+checksums.sha256     SHA-256 of every file
+```
+
+## How to reproduce
+
+1. Verify the package (stops on any mismatch):
+
+   ```
+   python scripts/reproduce.py --package . --verify-only
+   ```
+
+2. Rebuild the environment. See `env/REBUILD.md`. To print the commands:
+
+   ```
+   python scripts/reproduce.py --package . --rebuild --dry-run
+   ```
+
+3. Get the weights: `${repo_id}` at revision `${revision}`. Weights are not included.
+   They are referenced by ID and SHA-256 in `manifest.yaml` (`model.weight_files`).
+
+4. Re-run the archived scripts and compare with the archived labels:
+
+   ```
+   ${reproduce_command}
+   ```
+
+   Add `--sample 20` for a quick check on a deterministic sample.
+   The report is written to `reproduction/REPRODUCTION_REPORT.md`.
+
+${data_section}
+
+## Expected result
+
+${expected_result}
+
+Do not regenerate or edit the scripts in `scripts/`. A reproduction must use the
+archived code so that the result does not depend on who or what runs it.
