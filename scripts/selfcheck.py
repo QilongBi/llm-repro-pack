@@ -15,7 +15,8 @@ from common import (PROVENANCE_LABELS, WEIGHT_SUFFIXES, field_value, get_path, i
 import hash_files
 import secret_scan
 
-REQUIRED_FILES = ("manifest.yaml", "README.md", "REPRODUCIBILITY.md", "checksums.sha256",
+REQUIRED_FILES = ("manifest.yaml", "README.md", "REPRODUCIBILITY.md", "BEST_PRACTICES.md", "PROMPT_CODEBOOK.md",
+                  "checksums.sha256", "scripts/stability.py",
                   "scripts/reproduce.py", "scripts/reproduce.sh", "scripts/classify.py", "scripts/compare.py")
 
 

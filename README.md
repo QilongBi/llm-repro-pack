@@ -8,7 +8,10 @@ and run on stacks nobody outside the provider can inspect. Open models can be pi
 exactly (weights commit, tokenizer and chat template, engine version, precision, decoding
 settings, hardware). Following Spirling (Nature, 2023) and Palmer, Smith & Spirling
 (Nature Computational Science, 2024), this skill targets open and open-weight models and
-treats hosted APIs as a degraded mode.
+treats hosted APIs as a degraded mode. Each package is also checked against the best
+practices for LLM text annotation in Törnberg (2024, arXiv:2402.05129): model choice,
+coding procedure, prompt codebook, validation, prompt structure, explicit parameters,
+ethics and law, stochasticity and training-data contamination.
 
 The skill itself only orchestrates. Fixed, bundled Python scripts do all deterministic work:
 discovery, evidence collection, hashing, manifest building, grading, self-checks, re-running
@@ -21,12 +24,15 @@ depend on which agent or person runs it.
 manifest.yaml        every field: value + provenance label + source
 README.md            how to reproduce
 REPRODUCIBILITY.md   grade A-D, missing items, conflicts, caveats
+BEST_PRACTICES.md    checklist against Törnberg (2024)
+PROMPT_CODEBOOK.md   categories, prompts, examples and settings in one document
 env/                 environment files, hardware info, rebuild instructions
 prompts/             prompt files + fully rendered model inputs (hashed)
 scripts/             archived runner, engine adapters, reproduce.sh, compare
 outputs/             archived labels, raw outputs, requests
 logs/
 data/                input data, or access instructions + hash
+validation/          per-class metrics, inter-coder reliability, misclassified items
 checksums.sha256
 ```
 
@@ -59,11 +65,14 @@ python $S/confirm.py select --project study labels=outputs/labels.csv data=data/
 python $S/collect_env.py --project study --model-id allenai/OLMo-2-1124-7B-Instruct --run-mode self_run
 python $S/confirm.py pending --project study
 python $S/confirm.py field --project study model.revision --as researcher_confirmed
+python $S/confirm.py practices --project study --file study/practices.yaml
 python $S/package.py --project study --data-shareable yes
 python study-repro-pack/scripts/reproduce.py --package study-repro-pack --engine vllm --sample 20
+python study-repro-pack/scripts/stability.py --package study-repro-pack --engine vllm --repeats 3 --paraphrase v1.yaml
 ```
 
 See `SKILL.md` for the full workflow, `docs/grading.md` for the evidence hierarchy,
+`docs/best-practices.md` for the Törnberg (2024) checklist,
 `docs/reference-cases.md` for OLMo 2 and gpt-oss, and `docs/extending.md` to add engines
 and model families.
 

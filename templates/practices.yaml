@@ -1,0 +1,49 @@
+# Best-practice record (Törnberg 2024, "Best Practices for Text Annotation with LLMs").
+# Fill in what applies. Leave a field empty rather than guessing; empty fields stay unknown.
+# Load it with:  python confirm.py practices --project P --file practices.yaml
+study:
+  # 1. Why this model? Cover reproducibility, ethics/legality, transparency, language and
+  #    culture of the texts, scalability, task complexity.
+  model_choice_rationale: ""
+  # 1. Other models run on the same task to show robustness (name + agreement or metric).
+  models_compared: []
+  # 1. Did the model refuse or deflect items (guard-rail behaviour)? How were they handled?
+  guard_rail_refusals: ""
+  # 2. The iterative coding procedure: drafts, calibration rounds with human coders, revisions.
+  coding_procedure: ""
+  development_iterations: null
+  human_coders: null
+model:
+  # 1/3. Fine-tuned model? The fine-tuning data must then be provided (path, DOI or URL).
+  fine_tuned: null
+  fine_tuning_data: ""
+  # 9. Training data end date (model card).
+  training_cutoff: ""
+data:
+  # 9. Period the texts cover, e.g. "2019-01..2021-12".
+  time_period: ""
+  # 1/4. Language(s) and cultural context of the texts.
+  language: ""
+validation:
+  # 4. true only if the validation set was coded after the prompt was final.
+  after_prompt_freeze: null
+  # 9. true if the validation set is a public, already-labeled dataset (contamination risk).
+  gold_publicly_available: null
+  # 4. Why the chosen metrics fit the task.
+  metric_rationale: ""
+  # 4. How failures were examined; known weaknesses and why they do not undermine the results.
+  failure_analysis: ""
+ethics:
+  # 7. Consent of the people whose data is analysed, and whether they were told about LLM use.
+  consent: ""
+  # 7. Data processing agreement with the API provider (hosted mode), or "not needed: self-run".
+  data_processing_agreement: ""
+  # 7. Anonymization or pseudonymization before sending data to a model.
+  anonymization: ""
+  # 7. Only the minimum data necessary was sent.
+  data_minimization: ""
+  # 7. Where data was stored and processed; transfers outside the EU/EEA and safeguards.
+  storage_and_transfer: ""
+  # 7. Copyright and terms of service for the texts (licenses, permissions).
+  copyright_and_tos: ""
+  notes: ""

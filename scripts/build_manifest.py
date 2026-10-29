@@ -32,6 +32,10 @@ ROLE_DEST = {
     "logs": ("logs", {"logs", "log"}),
     "env_package": ("env/provided", {"env", "environment"}),
     "gold": ("validation", {"validation"}),
+    "dev_set": ("validation/development", {"validation", "dev"}),
+    "codebook": ("prompts/codebook", {"prompts", "docs"}),
+    "stability_runs": ("outputs/stability", {"outputs", "output", "results"}),
+    "practices": ("docs", {"docs"}),
 }
 MAX_COPY_BYTES = 500 * 1024 * 1024
 REDISTRIBUTABLE_LICENSES = {"apache-2.0", "mit", "bsd-3-clause", "bsd-2-clause", "cc-by-4.0", "openrail"}
@@ -55,6 +59,8 @@ class Builder:
         self.path_map: dict[str, str] = {}
         self.warnings: list[str] = list(self.ev.get("warnings", []))
         self.m: dict[str, Any] = {}
+        self.spec: dict | None = None
+        self._reqs: list[dict] = []
 
     # ------------------------------------------------------------ copying
     def _abs(self, rel: str) -> Path:
@@ -154,13 +160,15 @@ class Builder:
         for role in ROLE_DEST:
             if role == "data" and not self.opts.data_shareable:
                 continue
-            if role == "gold" and not self.opts.gold_shareable:
+            if role in ("gold", "dev_set") and not self.opts.gold_shareable:
                 continue
             self.copy_role(role)
         self._data_fields()
         self._output_fields()
         self._prompt_fields(run_mode)
+        self._lint()
         self._validation()
+        self._stability()
         self._profile_fields()
         self._env_files()
         self._fix_paths()
@@ -241,6 +249,7 @@ class Builder:
             s = ri.load_spec(self.out / r["package_path"])
             if s:
                 spec, spec_rec = s, r
+                self.spec = s
                 break
         requests: list[dict] = []
         source, complete = None, False
@@ -273,6 +282,7 @@ class Builder:
                              r["package_path"], note="identical to the system message in archived requests")
             self.put("prompt.user_template", "built by original code; see rendered inputs", "claude_inferred",
                      "scripts/original", basis="no template file; user messages come from the run script")
+        self._reqs = requests
         if not requests:
             self.warnings.append("No rendered inputs: no prompt.yaml spec and no archived requests.")
             return
@@ -303,6 +313,24 @@ class Builder:
         self.put("prompt.chat_template_applied", applied, "code_declared" if applied else "claude_inferred",
                  "render_inputs.py", basis=None if applied else "chat template rendering was not run")
 
+    def _lint(self) -> None:
+        from prompt_lint import lint
+        labels = field_value(self.m, "study.label_set")
+        labels = labels if isinstance(labels, list) else []
+        roles = [m.get("role") for m in self._reqs[0]["messages"]] if self._reqs else None
+        if self.spec:
+            res = lint(self.spec.get("system") or "", self.spec.get("user_template") or "", labels,
+                       self.spec.get("labels") or None, self.spec.get("few_shot"), roles)
+        elif self._reqs:
+            msgs = self._reqs[0]["messages"]
+            system = "\n".join(m["content"] for m in msgs if m.get("role") == "system" and isinstance(m.get("content"), str))
+            users = [m["content"] for m in msgs if m.get("role") == "user" and isinstance(m.get("content"), str)]
+            res = lint(system, users[-1] if users else "", labels, None, None, roles)
+        else:
+            return
+        self.put("prompt.lint", res, "code_declared", "prompt_lint.py on the archived prompt",
+                 note="advisory checks after Törnberg (2024); the archived prompt is not changed")
+
     def _snapshot_path(self) -> Path | None:
         rev = field_value(self.m, "model.revision")
         for s in (self.ev.get("info") or {}).get("hf_cache_snapshots") or []:
@@ -318,27 +346,89 @@ class Builder:
         if not e:
             return
         gold = self._abs(e["path"])
-        self.put("validation.gold_sha256", sha256_file(gold), "researcher_provided", e["path"])
+        src_g = e["path"]
+        self.put("validation.gold_sha256", sha256_file(gold), "researcher_provided", src_g)
         lab = self.copied.get("labels") or []
         idc = field_value(self.m, "outputs.id_column")
         lc = field_value(self.m, "outputs.label_column")
-        gid = self.opts.gold_id_column or idc
-        glc = self.opts.gold_label_column or lc
+        gid = getattr(self.opts, "gold_id_column", None) or idc
+        glc = getattr(self.opts, "gold_label_column", None) or lc
         if not (lab and idc and lc and gid and glc):
             self.warnings.append("Validation skipped: label or gold columns unknown.")
             return
-        from compare import compare_labels
+        from validate import run_validation, write_errors
         multi = field_value(self.m, "study.task_type") == "multi_label"
         sep = field_value(self.m, "study.multi_label_separator")
-        g = load_labels(gold, gid, glc, multi, sep)
-        p = load_labels(self.out / lab[0]["package_path"], idc, lc, multi, sep)
-        res = compare_labels(g, p, multi)
-        src = "compare.py: archived labels vs researcher-provided gold set"
-        self.put("validation.n_compared", res["n_compared"], "researcher_provided", src)
-        self.put("validation.accuracy", res.get("accuracy_vs_a"), "researcher_provided", src)
-        self.put("validation.macro_f1", res.get("macro_f1_vs_a"), "researcher_provided", src)
-        self.put("validation.cohens_kappa", res.get("cohens_kappa"), "researcher_provided", src)
-        self.put("validation.krippendorff_alpha", res.get("krippendorff_alpha"), "researcher_provided", src)
+        preds = load_labels(self.out / lab[0]["package_path"], idc, lc, multi, sep)
+        data_rows = read_records(self._abs(self.roles["data"]["path"])) if "data" in self.roles else None
+        shots = []
+        for ex in (self.spec or {}).get("few_shot") or []:
+            inp = ex.get("input")
+            shots.append(inp.get("text", "") if isinstance(inp, dict) else str(inp))
+        dev_ids = None
+        if "dev_set" in self.roles:
+            dev_ids = set()
+            for d in self.roles["dev_set"]:
+                for r in read_records(self._abs(d["path"])):
+                    key = gid if gid in r else (field_value(self.m, "data.id_column") or "id")
+                    if key in r:
+                        dev_ids.add(str(r[key]))
+        coders = [c.strip() for c in (getattr(self.opts, "gold_coder_columns", None) or "").split(",") if c.strip()]
+        res = run_validation(gold, gid, glc, preds, multi, sep, coder_cols=coders or None,
+                             subset_col=getattr(self.opts, "subset_column", None), data_rows=data_rows,
+                             data_id=field_value(self.m, "data.id_column"),
+                             data_text=field_value(self.m, "data.text_column"),
+                             few_shot_texts=shots, dev_ids=dev_ids)
+        src = "validate.py: archived labels vs researcher-provided gold set"
+        for key in ("n_compared", "accuracy", "macro_f1", "weighted_f1", "cohens_kappa", "krippendorff_alpha",
+                    "per_class", "per_class_support", "min_class_support", "small_classes",
+                    "human_intercoder_alpha", "llm_vs_coders", "llm_and_humans_alpha", "subsets", "leakage",
+                    "confusion_matrix"):
+            if res.get(key) is not None:
+                self.put(f"validation.{key}", res[key], "researcher_provided", src)
+        vdir = self.out / "validation"
+        include_text = bool(self.opts.data_shareable)
+        write_errors(vdir / "errors.csv", res["errors"], include_text, bool(self.opts.gold_shareable))
+        self.put("validation.errors_file", "validation/errors.csv", "researcher_provided", src,
+                 note=f"{len(res['errors'])} misclassified items for failure analysis")
+        import json as _json
+        (vdir / "metrics.json").write_text(_json.dumps({k: v for k, v in res.items() if k != "errors"},
+                                                       indent=2, default=list) + "\n", encoding="utf-8")
+        if res["small_classes"]:
+            self.warnings.append(f"Validation: classes with fewer than 20 items: {', '.join(res['small_classes'])}. "
+                                 "Törnberg (2024) recommends at least 20-30 per class.")
+        lk = res["leakage"]
+        if lk.get("few_shot_in_validation") or lk.get("dev_set_in_validation"):
+            self.warnings.append("Validation leakage: validation items also used as few-shot examples or in "
+                                 "prompt development: " + ", ".join(lk.get("few_shot_in_validation", []) +
+                                                                     lk.get("dev_set_in_validation", [])))
+
+    def _stability(self) -> None:
+        runs = self.copied.get("stability_runs") or []
+        lab = self.copied.get("labels") or []
+        idc = field_value(self.m, "outputs.id_column")
+        lc = field_value(self.m, "outputs.label_column")
+        if not runs or not lab or not (idc and lc):
+            return
+        from compare import krippendorff_alpha_nominal, compare_labels
+        multi = field_value(self.m, "study.task_type") == "multi_label"
+        sep = field_value(self.m, "study.multi_label_separator")
+        main = load_labels(self.out / lab[0]["package_path"], idc, lc, multi, sep)
+        others = {}
+        for r in runs:
+            if r["package_path"]:
+                try:
+                    others[r["package_path"]] = load_labels(self.out / r["package_path"], idc, lc, multi, sep)
+                except SystemExit:
+                    self.warnings.append(f"Stability run {r['package_path']} has no {idc}/{lc} columns; skipped.")
+        if not others:
+            return
+        ids = sorted(set(main).union(*others.values()))
+        alpha = krippendorff_alpha_nominal([[main.get(i)] + [o.get(i) for o in others.values()] for i in ids])
+        exact = {k: compare_labels(main, o, multi).get("exact_match_rate") for k, o in others.items()}
+        self.put("stability.archived_runs", {"n_runs": len(others) + 1, "files": sorted(others),
+                                             "krippendorff_alpha": alpha, "exact_match_vs_main": exact},
+                 "run_time_evidence", "archived repeated or paraphrased runs")
 
     def _profile_fields(self) -> None:
         prof = get_profile(field_value(self.m, "model_profile.name") or "default")

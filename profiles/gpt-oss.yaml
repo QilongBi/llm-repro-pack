@@ -50,6 +50,11 @@ fields:
     description: "Channel used to read the label (final channel expected)."
     default: final
     default_basis: "harmony places the user-facing answer in the final channel."
+hints:
+  "openai/gpt-oss-20b":
+    model.training_cutoff: "2024-06 (knowledge cutoff stated on the model card)"
+  "openai/gpt-oss-120b":
+    model.training_cutoff: "2024-06 (knowledge cutoff stated on the model card)"
 notes:
   - "MXFP4 kernels need recent GPUs (e.g. Hopper/Blackwell with recent engines). Older GPUs and Apple Silicon dequantize to bf16, so numerics differ across hardware. Treat cross-hardware runs as statistical reproduction."
   - "Reasoning traces change with reasoning effort. Record the effort level and archive the analysis channel."

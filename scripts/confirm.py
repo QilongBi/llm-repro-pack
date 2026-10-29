@@ -11,6 +11,8 @@ Subcommands:
                (no '=value' confirms the currently resolved value)
              --as claude_inferred requires --basis.
   columns  Record column names: python confirm.py columns --project P data.id_column=id ...
+  practices  Load a filled-in best-practice record (templates/practices.yaml):
+             python confirm.py practices --project P --file practices.yaml
   show     Print the selection and recorded answers.
   pending  List fields that still need the researcher (inferred values and conflicts).
 """
@@ -95,6 +97,21 @@ def cmd_field(project: Path, items: list[str], as_label: str, basis: str | None,
     save_yaml(paths["answers"], answers)
 
 
+def cmd_practices(project: Path, file: Path) -> None:
+    from common import flatten, is_blank
+    paths = _paths(project)
+    answers = load_yaml(paths["answers"], {})
+    n = 0
+    for key, val in flatten(load_yaml(file, {}) or {}).items():
+        if is_blank(val):
+            continue
+        answers[key] = make_field(val, "researcher_provided", f"best-practice record {file.name}")
+        answers[key]["recorded_at"] = now_iso()
+        n += 1
+    save_yaml(paths["answers"], answers)
+    print(f"Recorded {n} best-practice answers from {file}.")
+
+
 def cmd_show(project: Path) -> None:
     paths = _paths(project)
     sel = load_yaml(paths["selection"], {})
@@ -158,6 +175,9 @@ def main() -> int:
     c = sub.add_parser("columns")
     c.add_argument("--project", type=Path, required=True)
     c.add_argument("items", nargs="+")
+    pr = sub.add_parser("practices")
+    pr.add_argument("--project", type=Path, required=True)
+    pr.add_argument("--file", type=Path, required=True)
     for name in ("show", "pending"):
         p = sub.add_parser(name)
         p.add_argument("--project", type=Path, required=True)
@@ -168,6 +188,8 @@ def main() -> int:
         cmd_field(args.project, args.items, args.as_label, args.basis, args.source)
     elif args.cmd == "columns":
         cmd_field(args.project, args.items, "researcher_provided", None, "researcher input")
+    elif args.cmd == "practices":
+        cmd_practices(args.project, args.file)
     elif args.cmd == "show":
         cmd_show(args.project)
     elif args.cmd == "pending":

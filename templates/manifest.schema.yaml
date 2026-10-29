@@ -301,3 +301,51 @@ fields:
   - path: validation.krippendorff_alpha
     critical: []
     when: {field: validation.gold_sha256, known: true}
+
+  # ---------------------------------------------------------------- best practice (Törnberg 2024)
+  # Recommended fields. They do not change the A-D grade; BEST_PRACTICES.md reports them.
+  - path: study.model_choice_rationale
+    critical: []
+    fix: "Explain why this model was chosen (practices.yaml)."
+  - path: study.models_compared
+    critical: []
+  - path: study.guard_rail_refusals
+    critical: []
+  - path: study.coding_procedure
+    critical: []
+    fix: "Describe the iterative coding procedure (practices.yaml)."
+  - path: model.fine_tuned
+    critical: []
+  - path: model.fine_tuning_data
+    critical: [self_run]
+    when: {field: model.fine_tuned, equals: true}
+    fix: "Provide the fine-tuning data (path, DOI or URL)."
+  - path: model.training_cutoff
+    critical: []
+    fix: "Copy the training data end date from the model card."
+  - path: data.time_period
+    critical: []
+  - path: data.language
+    critical: []
+  - path: validation.after_prompt_freeze
+    critical: []
+    when: {field: validation.gold_sha256, known: true}
+  - path: validation.gold_publicly_available
+    critical: []
+    when: {field: validation.gold_sha256, known: true}
+  - path: validation.failure_analysis
+    critical: []
+    when: {field: validation.gold_sha256, known: true}
+  - path: ethics.consent
+    critical: []
+  - path: ethics.data_processing_agreement
+    critical: []
+    when: {field: study.run_mode, equals: hosted_api}
+  - path: ethics.anonymization
+    critical: []
+  - path: ethics.data_minimization
+    critical: []
+  - path: ethics.storage_and_transfer
+    critical: []
+  - path: ethics.copyright_and_tos
+    critical: []

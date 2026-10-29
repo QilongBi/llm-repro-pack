@@ -204,6 +204,22 @@ def iter_fields(d: dict, prefix: str = "") -> Iterable[tuple[str, dict]]:
             yield from iter_fields(v, p)
 
 
+def flatten(d: dict, prefix: str = "") -> dict[str, Any]:
+    """Nested dict -> {dotted.path: leaf}. Lists are leaves."""
+    out: dict[str, Any] = {}
+    for k, v in (d or {}).items():
+        p = f"{prefix}.{k}" if prefix else str(k)
+        if isinstance(v, dict) and v:
+            out.update(flatten(v, p))
+        else:
+            out[p] = v
+    return out
+
+
+def is_blank(v: Any) -> bool:
+    return v is None or v == "" or v == [] or v == {}
+
+
 def field_value(manifest: dict, dotted: str) -> Any:
     f = get_path(manifest, dotted)
     return f["value"] if is_field(f) else None

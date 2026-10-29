@@ -20,12 +20,15 @@ See `REPRODUCIBILITY.md` for missing items, conflicts and caveats. Every value i
 ```
 manifest.yaml        every captured field with value, provenance and source
 REPRODUCIBILITY.md   grade, missing items, conflicts, caveats
+BEST_PRACTICES.md    checklist against Törnberg (2024) best practices for LLM annotation
+PROMPT_CODEBOOK.md   categories, prompts, examples and settings in one document
 env/                 environment files and hardware info
 prompts/             prompt files and rendered model inputs
 scripts/             archived runner, adapters, reproduce and compare scripts
 outputs/             archived labels and raw outputs
 logs/                run logs
 data/                input data, or access instructions if it cannot be shared
+validation/          validation metrics and misclassified items (if a gold set was provided)
 checksums.sha256     SHA-256 of every file
 ```
 
@@ -54,6 +57,12 @@ checksums.sha256     SHA-256 of every file
 
    Add `--sample 20` for a quick check on a deterministic sample.
    The report is written to `reproduction/REPRODUCTION_REPORT.md`.
+
+5. Prompt stability (repeats, and researcher-written paraphrases of `prompts/prompt.yaml`):
+
+   ```
+   python scripts/stability.py --package . --engine <engine> --sample 50 --repeats 3 --paraphrase v1.yaml
+   ```
 
 ${data_section}
 

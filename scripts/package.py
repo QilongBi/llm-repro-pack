@@ -6,6 +6,7 @@ Usage:
   python package.py --project P --data-shareable yes|no [--data-access "how to get it"]
                     [--out DIR] [--title T] [--gold-shareable yes|no]
                     [--gold-id-column C] [--gold-label-column C]
+                    [--gold-coder-columns c1,c2] [--subset-column C]
                     [--render-chat-template] [--max-rendered N] [--archive-weights] [--overwrite]
 """
 from __future__ import annotations
@@ -14,6 +15,7 @@ import argparse
 from pathlib import Path
 
 from common import save_yaml, state_dir
+import best_practices
 import build_manifest
 import grade as grade_mod
 import hash_files
@@ -36,13 +38,14 @@ def run(args: argparse.Namespace) -> dict:
         raise SystemExit("ERROR: put the package outside the project directory.")
     m = build_manifest.build(project, out, args)
     m["grade"] = grade_mod.grade(m)
+    m["best_practices"] = best_practices.evaluate(m)
     save_yaml(out / "manifest.yaml", m)
     write_docs.write_all(out, m)
     hash_files.write(out)
     res = selfcheck.selfcheck(out)
     save_yaml(state_dir(project) / "last_package.yaml", {"package": str(out), "grade": m["grade"]["grade"],
                                                          "selfcheck": res})
-    return {"package": out, "grade": m["grade"], "selfcheck": res}
+    return {"package": out, "grade": m["grade"], "selfcheck": res, "best_practices": m["best_practices"]}
 
 
 def main() -> int:
@@ -55,6 +58,8 @@ def main() -> int:
     ap.add_argument("--gold-shareable", type=yes_no, default=False)
     ap.add_argument("--gold-id-column")
     ap.add_argument("--gold-label-column")
+    ap.add_argument("--gold-coder-columns", help="Comma-separated human coder columns in the gold file.")
+    ap.add_argument("--subset-column", help="Column (gold or data) for per-subset validation, e.g. language.")
     ap.add_argument("--render-chat-template", action="store_true")
     ap.add_argument("--max-rendered", type=int, default=1000)
     ap.add_argument("--archive-weights", action="store_true")
@@ -72,6 +77,10 @@ def main() -> int:
             print("  - " + i)
     for e in res["selfcheck"]["errors"]:
         print("SELF-CHECK FAIL: " + e)
+    bp = res["best_practices"]
+    print("Best-practice checklist (Törnberg 2024): " + ", ".join(f"{k} {v}" for k, v in sorted(bp["counts"].items())))
+    if not bp["validated"]:
+        print("  WARNING: no validation against human labels. Provide a gold set if one exists.")
     print("Self-check passed." if res["selfcheck"]["ok"] else "Self-check FAILED.")
     return 0 if res["selfcheck"]["ok"] else 1
 

@@ -31,8 +31,9 @@ LOG_DIRS = {"logs", "log"}
 ENV_DIRS = {"env", "environment"}
 
 # Roles that take one file versus a list.
-SINGLE_ROLES = ("config", "data", "labels", "gold")
-LIST_ROLES = ("prompt_files", "raw_outputs", "requests", "logs", "code", "env_package")
+SINGLE_ROLES = ("config", "data", "labels", "gold", "practices")
+LIST_ROLES = ("prompt_files", "raw_outputs", "requests", "logs", "code", "env_package", "codebook", "dev_set",
+              "stability_runs")
 ALL_ROLES = SINGLE_ROLES + LIST_ROLES
 
 
@@ -72,8 +73,16 @@ def _roles_for(rel: str) -> list[str]:
                            r"nvidia[_-]?smi|^hardware|^uv\.lock$|^poetry\.lock$|\.lock$", name):
         if not name.endswith(".md"):
             roles.append("env_package")
-    if ext in DATA_EXT and re.search(r"gold|human|manual|ground[_-]?truth|reference_label", stem):
+    if ext in DATA_EXT and re.search(r"gold|human|ground[_-]?truth|reference_label|validation_set", stem):
         roles.append("gold")
+    if ext in {".md", ".pdf", ".docx", ".txt", ".html"} and re.search(r"codebook|guideline|annotation[_-]?manual|coding[_-]?manual", stem):
+        roles.append("codebook")
+    if ext in DATA_EXT and re.search(r"dev|dev[_-]?set|pilot|calibration|training[_-]?sample|prompt[_-]?dev", stem):
+        roles.append("dev_set")
+    if ext in DATA_EXT and re.search(r"repeat|rerun|paraphrase|stability|run[_-]?[0-9]+$", stem):
+        roles.append("stability_runs")
+    if ext in {".yaml", ".yml"} and re.search(r"^practices|best[_-]?practice", stem):
+        roles.append("practices")
     return roles
 
 

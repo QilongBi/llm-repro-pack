@@ -997,6 +997,11 @@ def collect(project: Path, args: argparse.Namespace) -> dict:
                              "from": "run-time timestamps" if rt_times else "file modified times"}
 
     collect_env_package(ev, files("env_package"), run_end)
+    from common import flatten, is_blank
+    for pf in files("practices"):
+        for key, val in flatten(load_yaml(pf, {}) or {}).items():
+            if not is_blank(val):
+                ev.add(key, val, "researcher_provided", ev.rel(pf), note="best-practice record")
     collect_code(ev, files("code"), files("config"), files("prompt_files"), run_end, profile)
 
     # Hosted API specifics.

@@ -49,10 +49,11 @@ def init(project: Path) -> list[str]:
         if not p.exists():
             p.mkdir()
             created.append(d + "/")
-    for name in ("prompt.yaml", "config.yaml"):
+    for name, src in (("prompt.yaml", "templates/project/prompt.yaml"), ("config.yaml", "templates/project/config.yaml"),
+                      ("practices.yaml", "templates/practices.yaml")):
         dst = project / name
         if not dst.exists():
-            shutil.copyfile(resource_path(f"templates/project/{name}"), dst)
+            shutil.copyfile(resource_path(src), dst)
             created.append(name)
     extras = {project / "env" / "README.md": ENV_README, project / ".gitignore": GITIGNORE}
     for dst, text in extras.items():
@@ -71,7 +72,7 @@ def main() -> int:
         print("Created: " + ", ".join(created))
     else:
         print("Nothing to create; the layout already exists.")
-    print("Layout: prompt.yaml, config.yaml, data/, outputs/, logs/, env/")
+    print("Layout: prompt.yaml, config.yaml, practices.yaml, data/, outputs/, logs/, env/")
     return 0
 
 

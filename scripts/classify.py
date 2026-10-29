@@ -59,6 +59,29 @@ def _known(v):
     return None if v in (None, "", "unknown") else v
 
 
+def locate_data(pkg: Path, m: dict) -> Path | None:
+    """The data file: shipped in the package, or placed under data/ by the researcher (hash-checked)."""
+    from common import sha256_file
+    rel = field_value(m, "data.path")
+    if rel not in (None, "unknown", "not_shared") and (pkg / rel).exists():
+        return pkg / rel
+    want = field_value(m, "data.sha256")
+    for p in sorted((pkg / "data").glob("*")) if (pkg / "data").exists() else []:
+        if p.is_file() and p.name != "ACCESS.md" and sha256_file(p) == want:
+            return p
+    return None
+
+
+def render_variant(pkg: Path, m: dict, spec_file: Path, sample: int | None) -> list[dict]:
+    """Render inputs from an alternative prompt spec (prompt-stability analysis)."""
+    data = locate_data(pkg, m)
+    if data is None:
+        print("ERROR: the data file is needed to render a prompt variant; place it under data/.", file=sys.stderr)
+        raise SystemExit(4)
+    reqs = ri.render_spec_file(spec_file, data, field_value(m, "data.id_column") or "id")
+    return ri.deterministic_sample(reqs, sample) if sample else reqs
+
+
 def load_requests(pkg: Path, m: dict, sample: int | None) -> list[dict]:
     rel = field_value(m, "prompt.rendered_inputs_file")
     if not rel or rel == "unknown":
@@ -69,10 +92,10 @@ def load_requests(pkg: Path, m: dict, sample: int | None) -> list[dict]:
     reqs = archived
     if not complete:
         sp = str(field_value(m, "prompt.user_template") or "")
-        data_rel = field_value(m, "data.path")
-        if "#user_template" in sp and data_rel not in (None, "unknown", "not_shared"):
+        data_file = locate_data(pkg, m)
+        if "#user_template" in sp and data_file is not None:
             spec_file = pkg / sp.split("#", 1)[0]
-            full = ri.render_spec_file(spec_file, pkg / data_rel, field_value(m, "data.id_column") or "id")
+            full = ri.render_spec_file(spec_file, data_file, field_value(m, "data.id_column") or "id")
             by_id = {r["request_id"]: r for r in full}
             for a in archived:
                 if a["request_id"] not in by_id or by_id[a["request_id"]]["sha256"] != a["sha256"]:
@@ -105,11 +128,13 @@ def main() -> int:
     ap.add_argument("--model-name")
     ap.add_argument("--api-key-env")
     ap.add_argument("--ollama-tag")
+    ap.add_argument("--prompt-spec", type=Path, help="Alternative prompt.yaml (prompt-stability analysis only).")
     args = ap.parse_args()
     pkg = args.package.resolve()
     out = (args.out or pkg / "reproduction").resolve()
     m = load_yaml(pkg / "manifest.yaml")
-    reqs = load_requests(pkg, m, args.sample)
+    variant = args.prompt_spec is not None
+    reqs = render_variant(pkg, m, args.prompt_spec, args.sample) if variant else load_requests(pkg, m, args.sample)
     spec = build_spec(m, args)
     adapter = get_adapter(args.engine)(spec)
 
@@ -120,7 +145,7 @@ def main() -> int:
     if want and have and want != have:
         print(f"ERROR: chat template hash mismatch (manifest {want}, engine {have}).", file=sys.stderr)
         return 3
-    for r in reqs:
+    for r in reqs if not variant else []:
         if r.get("rendered_sha256"):
             text = adapter.render(r["messages"])
             if text is not None and sha256_text(text) != r["rendered_sha256"]:
@@ -152,7 +177,8 @@ def main() -> int:
             "n_requests": len(reqs), "sample": args.sample, "spec": {k: v for k, v in vars(spec).items()
                                                                   if k != "api_key_env"},
             "api_key_env_name": spec.api_key_env, "checks": checks,
-            "n_invalid": sum(1 for v in labels.values() if v == INVALID)}
+            "n_invalid": sum(1 for v in labels.values() if v == INVALID),
+            "prompt_variant": str(args.prompt_spec) if variant else None}
     (out / "run_info.json").write_text(json.dumps(info, indent=2, default=str) + "\n", encoding="utf-8")
     print(f"Wrote {len(labels)} labels to {out / 'labels.jsonl'} ({info['n_invalid']} invalid).")
     return 0

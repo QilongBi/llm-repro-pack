@@ -126,7 +126,98 @@ def rebuild(m: dict, pkg: Path) -> str:
     return "\n".join(lines)
 
 
+STATUS_MARK = {"met": "met", "partial": "partial", "not_met": "NOT MET", "not_documented": "not documented",
+               "n/a": "n/a"}
+
+
+def best_practices_doc(m: dict) -> str:
+    bp = m.get("best_practices") or {}
+    lines = ["# Best-practice checklist", "",
+             "Checked against Törnberg (2024), *Best Practices for Text Annotation with Large Language Models* "
+             "(arXiv:2402.05129). This checklist is separate from the reproducibility grade in "
+             "`REPRODUCIBILITY.md`: it covers validity and research practice, not only re-execution.", ""]
+    counts = bp.get("counts") or {}
+    lines += ["Summary: " + ", ".join(f"{STATUS_MARK.get(k, k)} {v}" for k, v in sorted(counts.items())), ""]
+    if not bp.get("validated"):
+        lines += ["**No validation against human labels was provided.** Törnberg (2024) treats validation as a "
+                  "basic requirement for every publication that uses LLM annotations.", ""]
+    point = None
+    for it in bp.get("items") or []:
+        if it["point"] != point:
+            point = it["point"]
+            lines += ["", f"## {point}", "", "| Requirement | Status | Evidence |", "|---|---|---|"]
+        ev = str(it["evidence"]).replace("|", "/")
+        lines.append(f"| {it['requirement']} | {STATUS_MARK.get(it['status'], it['status'])} | {ev} |")
+    lines += ["", "Items marked *not documented* can be added with `practices.yaml` "
+              "(`confirm.py practices`) and a rebuild. The archived run itself is never changed.", ""]
+    return "\n".join(lines)
+
+
+def prompt_codebook(m: dict, pkg: Path) -> str:
+    import render_inputs as ri
+    from common import read_jsonl
+    lines = ["# Prompt codebook", "",
+             "Everything needed to reproduce the LLM coding: categories, prompts, examples and settings. "
+             "Generated from `manifest.yaml`; the prompt files in `prompts/` are authoritative.", "",
+             "## Model and settings", "", "| Setting | Value | Provenance |", "|---|---|---|"]
+    rows = [("model", "model.repo_id"), ("revision", "model.revision"), ("hosted model name", "hosted_api.model_name"),
+            ("provider", "hosted_api.provider"), ("engine", "engine.name"), ("engine version", "engine.version"),
+            ("temperature", "decoding.temperature"), ("top_p", "decoding.top_p"), ("top_k", "decoding.top_k"),
+            ("seed", "decoding.seed"), ("max tokens", "decoding.max_tokens"), ("batch size", "decoding.batch_size"),
+            ("precision", "decoding.precision")]
+    for name, path in rows:
+        f = get_path(m, path)
+        if is_field(f) and f["provenance"] != "unknown":
+            lines.append(f"| {name} | {_short(f['value'])} | {f['provenance']} |")
+    for k, f in sorted((m.get("model_profile") or {}).items()):
+        if is_field(f) and k != "name" and f["provenance"] != "unknown":
+            lines.append(f"| {k} | {_short(f['value'])} | {f['provenance']} |")
+    spec = None
+    ut = str(field_value(m, "prompt.user_template") or "")
+    if "#user_template" in ut:
+        spec = ri.load_spec(pkg / ut.split("#", 1)[0])
+    lines += ["", "## Categories", ""]
+    if spec and spec.get("labels"):
+        for lab in spec["labels"]:
+            if isinstance(lab, dict):
+                lines.append(f"- **{lab['name']}**: {lab.get('definition', '(no definition)')}")
+                for ex in lab.get("examples") or []:
+                    lines.append(f"  - example: {ex}")
+            else:
+                lines.append(f"- **{lab}**")
+    else:
+        for lab in field_value(m, "study.label_set") or []:
+            lines.append(f"- **{lab}**")
+    cb = (m.get("files") or {}).get("codebook") or []
+    if cb:
+        lines += ["", "Human coder guidelines: " + ", ".join(f"`{c['package_path']}`" for c in cb if c.get("package_path"))]
+    lines += ["", "## Prompt", ""]
+    fence = "`" * 3
+    if spec:
+        lines += ["System:", "", fence, str(spec.get("system") or "(none)").rstrip(), fence, "",
+                  "User template:", "", fence, str(spec.get("user_template")).rstrip(), fence]
+        if spec.get("few_shot"):
+            lines += ["", "Few-shot examples, in this order:", ""]
+            for i, ex in enumerate(spec["few_shot"], 1):
+                lines.append(f"{i}. input `{ex.get('input')}` -> `{ex.get('output')}`")
+    else:
+        rel = field_value(m, "prompt.rendered_inputs_file")
+        if rel and rel != "unknown" and (pkg / rel).exists():
+            first = read_jsonl(pkg / rel)[:1]
+            for msg in first[0]["messages"] if first else []:
+                body = str(msg.get("content"))
+                body = body if len(body) < 1500 else body[:1500] + " ..."
+                lines += [f"{msg.get('role')}:", "", fence, body, fence, ""]
+            lines.append("(First archived request shown; all requests are in `" + rel + "`.)")
+    lines += ["", "## Output and label extraction", "",
+              f"Rule: `{_short(field_value(m, 'outputs.label_extraction_rule'), 200)}`. "
+              "Invalid outputs are kept as invalid; they are never repaired.", ""]
+    return "\n".join(lines)
+
+
 def write_all(pkg: Path, m: dict) -> None:
+    (pkg / "BEST_PRACTICES.md").write_text(best_practices_doc(m), encoding="utf-8", newline="\n")
+    (pkg / "PROMPT_CODEBOOK.md").write_text(prompt_codebook(m, pkg), encoding="utf-8", newline="\n")
     (pkg / "README.md").write_text(readme(m), encoding="utf-8", newline="\n")
     (pkg / "REPRODUCIBILITY.md").write_text(reproducibility(m), encoding="utf-8", newline="\n")
     (pkg / "env").mkdir(exist_ok=True)

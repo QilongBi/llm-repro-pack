@@ -71,6 +71,25 @@ def macro_f1(ref: Sequence[Any], pred: Sequence[Any]) -> float | None:
     return sum(f1s) / len(f1s)
 
 
+def per_class_report(ref: Sequence[Any], pred: Sequence[Any]) -> dict:
+    """Precision, recall, F1 and support per class, plus weighted F1 and a confusion matrix."""
+    labels = sorted(set(ref) | set(pred), key=str)
+    per, weighted, n = {}, 0.0, len(ref)
+    for c in labels:
+        tp = sum(1 for x, y in zip(ref, pred) if x == c and y == c)
+        fp = sum(1 for x, y in zip(ref, pred) if x != c and y == c)
+        fn = sum(1 for x, y in zip(ref, pred) if x == c and y != c)
+        p = tp / (tp + fp) if tp + fp else 0.0
+        r = tp / (tp + fn) if tp + fn else 0.0
+        f = 2 * p * r / (p + r) if p + r else 0.0
+        support = sum(1 for x in ref if x == c)
+        per[str(c)] = {"precision": p, "recall": r, "f1": f, "support": support}
+        weighted += f * support
+    confusion = {str(a): {str(b): sum(1 for x, y in zip(ref, pred) if x == a and y == b) for b in labels}
+                 for a in labels}
+    return {"per_class": per, "weighted_f1": weighted / n if n else None, "confusion_matrix": confusion}
+
+
 def _binary(labels: Sequence[tuple], c: str) -> list[int]:
     return [1 if c in s else 0 for s in labels]
 
