@@ -204,7 +204,7 @@ python study-repro-pack/scripts/reproduce.py --package study-repro-pack --engine
 python study-repro-pack/scripts/stability.py --package study-repro-pack --engine vllm --repeats 3 --paraphrase v1.yaml
 ```
 
-See `SKILL.md` for the agent instructions, `docs/grading.md` for the evidence hierarchy,
+See `SKILL.md` for the agent instructions, `docs/references.md` for citation status, `docs/grading.md` for the evidence hierarchy,
 `docs/best-practices.md` for the checklist, `docs/reference-cases.md` for OLMo 2 and
 gpt-oss, and `docs/extending.md` to add engines and model families.
 
