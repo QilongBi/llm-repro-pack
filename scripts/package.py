@@ -2,6 +2,10 @@
 
 Steps: build manifest and copy files -> grade -> README/REPRODUCIBILITY -> checksums -> self-check.
 
+Only grade A or B packages are produced. If any critical field is not locked, nothing is
+written to the output directory; the missing items are printed and saved to
+<project>/.llmrp/readiness.yaml. Exit code 3 in that case.
+
 Usage:
   python package.py --project P --data-shareable yes|no [--data-access "how to get it"]
                     [--out DIR] [--title T] [--gold-shareable yes|no]
@@ -12,6 +16,7 @@ Usage:
 from __future__ import annotations
 
 import argparse
+import shutil
 from pathlib import Path
 
 from common import save_yaml, state_dir
@@ -38,6 +43,10 @@ def run(args: argparse.Namespace) -> dict:
         raise SystemExit("ERROR: put the package outside the project directory.")
     m = build_manifest.build(project, out, args)
     m["grade"] = grade_mod.grade(m)
+    if not m["grade"]["eligible"]:
+        shutil.rmtree(out, ignore_errors=True)
+        save_yaml(state_dir(project) / "readiness.yaml", {"eligible": False, "grade": m["grade"]})
+        return {"package": None, "grade": m["grade"], "selfcheck": None, "best_practices": None}
     m["best_practices"] = best_practices.evaluate(m)
     save_yaml(out / "manifest.yaml", m)
     write_docs.write_all(out, m)
@@ -67,6 +76,14 @@ def main() -> int:
     args = ap.parse_args()
     res = run(args)
     g = res["grade"]
+    if not g["eligible"]:
+        print("NOT PACKAGED: " + g["meaning"])
+        for r in g["reasons"]:
+            print("  " + r)
+        print("Lock these fields first (confirm.py), then rerun package.py:")
+        for i in g["how_to_improve"]:
+            print("  - " + i)
+        return 3
     print(f"Package: {res['package']}")
     print(f"Grade {g['grade']}: {g['meaning']}")
     for r in g["reasons"]:

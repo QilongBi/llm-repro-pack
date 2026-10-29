@@ -10,8 +10,8 @@
 #   conflict:   true while candidates disagree and the researcher has not resolved it
 #
 # Keys per entry:
-#   critical:     run modes in which the field is critical for grades A/B
-#                 (self_run, hosted_api). An empty list means "recommended".
+#   critical:     true if the field must be locked for grade A or B; false means "recommended".
+#                 The skill only builds packages that reach grade A or B.
 #   required_for: grade that needs the field (A means only needed for grade A).
 #   when:         condition under which the field applies at all.
 #   unless:       condition under which the field is not critical.
@@ -21,331 +21,282 @@
 
 schema_version: "1.0"
 
-# Fields without which the run cannot be re-executed at all (grade D if any is missing).
-core_fields:
-  - model.repo_id
-  - prompt.files_sha256
-  - data.sha256
-  - outputs.labels
-
 fields:
   # ---------------------------------------------------------------- study
   - path: study.run_mode
-    critical: [self_run, hosted_api]
-    fix: "State whether the run was self-run or used a hosted API."
+    critical: true
+    fix: "Only self_run is supported: the researcher controlled the machine."
   - path: study.task_type
-    critical: [self_run, hosted_api]
+    critical: true
     fix: "State single_label or multi_label."
   - path: study.label_set
-    critical: [self_run, hosted_api]
+    critical: true
     fix: "Provide the allowed labels (prompt.yaml labels or config task.labels)."
   - path: study.run_date
-    critical: [self_run, hosted_api]
+    critical: true
     fix: "Provide run timestamps or logs. File times give only an approximate date."
 
   # ---------------------------------------------------------------- model
   - path: model.repo_id
-    critical: [self_run, hosted_api]
+    critical: true
     fix: "Give the exact Hugging Face repo ID of the weights."
   - path: model.revision
-    critical: [self_run]
+    critical: true
     fix: "Give the 40-character commit hash (HF cache folder snapshots/<hash>, or model_info().sha)."
   - path: model.weight_files
-    critical: [self_run]
+    critical: true
     fix: "Run collect_env.py with the weights in the local HF cache, or pass --model-path."
   - path: model.tokenizer_sha256
-    critical: [self_run]
+    critical: true
     fix: "Provide the tokenizer files from the same commit."
   - path: model.chat_template_sha256
-    critical: [self_run]
+    critical: true
     fix: "Provide tokenizer_config.json or chat_template.jinja from the same commit."
   - path: model.chat_template_source
-    critical: []
-    when: {field: study.run_mode, equals: self_run}
+    critical: false
   - path: model.format
-    critical: [self_run]
+    critical: true
     fix: "State original, gguf, mlx, ollama or other."
   - path: model.quantization
-    critical: [self_run]
+    critical: true
     fix: "State the quantization (none, mxfp4, Q4_K_M, awq, ...)."
   - path: model.converted_or_quantized
-    critical: []
-    when: {field: study.run_mode, equals: self_run}
+    critical: false
   - path: model.ollama_tag
-    critical: [self_run]
+    critical: true
     when: {field: engine.name, equals: ollama}
     fix: "Give the Ollama tag, e.g. gpt-oss:20b."
   - path: model.ollama_digest
-    critical: [self_run]
+    critical: true
     when: {field: engine.name, equals: ollama}
     fix: "Run 'ollama show --modelfile <tag>' or read /api/tags for the digest."
   - path: model.openness
-    critical: [self_run, hosted_api]
+    critical: true
     fix: "Confirm fully_open or open_weight."
   - path: model.license
-    critical: [self_run, hosted_api]
+    critical: true
     fix: "Copy the license from the model card."
   - path: model.license_restrictions
-    critical: []
+    critical: false
   - path: model.training_data_disclosed
-    critical: []
+    critical: false
   - path: model.training_data
-    critical: [self_run]
+    critical: true
     required_for: A
     when: {field: model.openness, equals: fully_open}
     fix: "Name the training datasets (pretraining, mid-training, post-training)."
   - path: model.training_data_version
-    critical: [self_run]
+    critical: true
     required_for: A
     when: {field: model.openness, equals: fully_open}
     fix: "Give dataset versions or revisions."
   - path: model.training_code_commit
-    critical: [self_run]
+    critical: true
     required_for: A
     when: {field: model.openness, equals: fully_open}
     fix: "Give the training code repository and commit."
   - path: model.checkpoint
-    critical: [self_run]
+    critical: true
     required_for: A
     when: {field: model.openness, equals: fully_open}
     fix: "Name the released checkpoint (stage and step)."
   - path: model_profile.name
-    critical: []
+    critical: false
 
   # ---------------------------------------------------------------- prompt
   - path: prompt.files_sha256
-    critical: [self_run, hosted_api]
+    critical: true
     fix: "Confirm the final prompt files."
   - path: prompt.system_prompt
-    critical: [self_run, hosted_api]
+    critical: true
     unless: {field: prompt.rendered_inputs_complete, equals: true}
     fix: "Point to the system prompt, or archive all rendered requests."
   - path: prompt.user_template
-    critical: [self_run, hosted_api]
+    critical: true
     unless: {field: prompt.rendered_inputs_complete, equals: true}
     fix: "Point to the user template with placeholders, or archive all rendered requests."
   - path: prompt.codebook
-    critical: []
+    critical: false
   - path: prompt.few_shot
-    critical: []
+    critical: false
   - path: prompt.rendered_inputs_file
-    critical: [self_run, hosted_api]
+    critical: true
     fix: "Provide a prompt.yaml spec or archived request payloads."
   - path: prompt.rendered_inputs_sha256
-    critical: [self_run, hosted_api]
+    critical: true
   - path: prompt.rendered_inputs_complete
-    critical: []
+    critical: false
   - path: prompt.chat_template_applied
-    critical: []
+    critical: false
 
   # ---------------------------------------------------------------- decoding
   - path: decoding.temperature
-    critical: [self_run, hosted_api]
+    critical: true
     fix: "Give the temperature, or state that the engine default was used."
   - path: decoding.top_p
-    critical: [self_run, hosted_api]
+    critical: true
     fix: "Give top_p, or state that the engine default was used."
   - path: decoding.top_k
-    critical: [self_run]
+    critical: true
     fix: "Give top_k, or state that the engine default was used."
   - path: decoding.seed
-    critical: [self_run]
+    critical: true
     when: {field: decoding.temperature, gt: 0}
     fix: "Give the random seed used for sampling."
   - path: decoding.max_tokens
-    critical: [self_run, hosted_api]
+    critical: true
     fix: "Give max_tokens / max_new_tokens."
   - path: decoding.batch_size
-    critical: [self_run]
+    critical: true
     fix: "Give the batch size (it changes numerics on GPUs)."
   - path: decoding.batch_invariant
-    critical: [self_run]
+    critical: true
     fix: "State whether batch-invariant or deterministic mode was on."
   - path: decoding.precision
-    critical: [self_run]
+    critical: true
     fix: "Give the dtype (bfloat16, float16, float32)."
 
   # ---------------------------------------------------------------- engine
   - path: engine.name
-    critical: [self_run]
+    critical: true
     fix: "Name the inference engine (transformers, vllm, ollama, mlx, llama.cpp)."
   - path: engine.version
-    critical: [self_run]
+    critical: true
     fix: "Provide pip freeze, conda export or the engine version from logs."
   - path: engine.libraries.torch
-    critical: [self_run]
+    critical: true
     when: {field: engine.name, in: [transformers, vllm]}
     fix: "Provide the torch version (pip freeze)."
   - path: engine.os
-    critical: [self_run]
+    critical: true
     fix: "Provide the OS (uname -a or platform)."
   - path: engine.python
-    critical: []
-    when: {field: study.run_mode, equals: self_run}
+    critical: false
   - path: engine.cuda
-    critical: [self_run]
+    critical: true
     when: {field: hardware.accelerator_vendor, equals: nvidia}
     fix: "Provide nvidia-smi output from the run machine."
   - path: engine.driver
-    critical: [self_run]
+    critical: true
     when: {field: hardware.accelerator_vendor, equals: nvidia}
     fix: "Provide nvidia-smi output from the run machine."
   - path: engine.container_image_digest
-    critical: []
-    when: {field: study.run_mode, equals: self_run}
+    critical: false
 
   # ---------------------------------------------------------------- hardware
   - path: hardware.accelerator
-    critical: [self_run]
+    critical: true
     fix: "Name the GPU or chip (nvidia-smi, system_profiler)."
   - path: hardware.accelerator_vendor
-    critical: [self_run]
+    critical: true
   - path: hardware.accelerator_memory
-    critical: []
-    when: {field: study.run_mode, equals: self_run}
+    critical: false
   - path: hardware.cpu
-    critical: []
-    when: {field: study.run_mode, equals: self_run}
+    critical: false
   - path: hardware.cloud_provider
-    critical: []
-    when: {field: study.run_mode, equals: self_run}
+    critical: false
   - path: hardware.instance_type
-    critical: []
-    when: {field: study.run_mode, equals: self_run}
+    critical: false
 
   # ---------------------------------------------------------------- data
   - path: data.path
-    critical: [self_run, hosted_api]
+    critical: true
   - path: data.sha256
-    critical: [self_run, hosted_api]
+    critical: true
   - path: data.id_column
-    critical: [self_run, hosted_api]
+    critical: true
     fix: "Name the ID column."
   - path: data.text_column
-    critical: [self_run, hosted_api]
+    critical: true
     fix: "Name the text column."
   - path: data.n_items
-    critical: [self_run, hosted_api]
+    critical: true
   - path: data.shareable
-    critical: [self_run, hosted_api]
+    critical: true
   - path: data.access_instructions
-    critical: [self_run, hosted_api]
+    critical: true
     when: {field: data.shareable, equals: false}
     fix: "Explain how later researchers can obtain the data."
   - path: data.truncation
-    critical: []
+    critical: false
     fix: "Provide a record of truncated items, or state that no truncation happened."
 
   # ---------------------------------------------------------------- outputs
   - path: outputs.labels
-    critical: [self_run, hosted_api]
+    critical: true
   - path: outputs.labels_sha256
-    critical: [self_run, hosted_api]
+    critical: true
   - path: outputs.id_column
-    critical: [self_run, hosted_api]
+    critical: true
   - path: outputs.label_column
-    critical: [self_run, hosted_api]
+    critical: true
   - path: outputs.label_extraction_rule
-    critical: [self_run, hosted_api]
+    critical: true
     fix: "State how the final label was extracted from model text."
   - path: outputs.raw_outputs
-    critical: []
+    critical: false
     fix: "Archive the raw model text, not only the final labels."
   - path: outputs.logs
-    critical: []
-
-  # ---------------------------------------------------------------- hosted API
-  - path: hosted_api.provider
-    critical: [hosted_api]
-    when: {field: study.run_mode, equals: hosted_api}
-    fix: "Name the API provider."
-  - path: hosted_api.model_name
-    critical: [hosted_api]
-    when: {field: study.run_mode, equals: hosted_api}
-    fix: "Give the provider's model name exactly as sent."
-  - path: hosted_api.base_url
-    critical: [hosted_api]
-    when: {field: study.run_mode, equals: hosted_api}
-  - path: hosted_api.call_timestamps
-    critical: [hosted_api]
-    when: {field: study.run_mode, equals: hosted_api}
-    fix: "Provide call timestamps (logs or response 'created' fields)."
-  - path: hosted_api.parameters
-    critical: [hosted_api]
-    when: {field: study.run_mode, equals: hosted_api}
-    fix: "Archive the request payloads."
-  - path: hosted_api.system_fingerprints
-    critical: []
-    when: {field: study.run_mode, equals: hosted_api}
-  - path: hosted_api.raw_responses
-    critical: [hosted_api]
-    when: {field: study.run_mode, equals: hosted_api}
-    fix: "Archive the raw API responses."
-  - path: hosted_api.api_key_env
-    critical: []
-    when: {field: study.run_mode, equals: hosted_api}
+    critical: false
 
   # ---------------------------------------------------------------- validation
   - path: validation.gold_sha256
-    critical: []
+    critical: false
     fix: "Provide a human-labeled validation set (--gold) to report accuracy, macro-F1 and agreement."
   - path: validation.accuracy
-    critical: []
+    critical: false
     when: {field: validation.gold_sha256, known: true}
   - path: validation.macro_f1
-    critical: []
+    critical: false
     when: {field: validation.gold_sha256, known: true}
   - path: validation.cohens_kappa
-    critical: []
+    critical: false
     when: {field: validation.gold_sha256, known: true}
   - path: validation.krippendorff_alpha
-    critical: []
+    critical: false
     when: {field: validation.gold_sha256, known: true}
 
   # ---------------------------------------------------------------- best practice (Törnberg 2024)
-  # Recommended fields. They do not change the A-D grade; BEST_PRACTICES.md reports them.
+  # Recommended fields. They do not change the A/B grade; BEST_PRACTICES.md reports them.
   - path: study.model_choice_rationale
-    critical: []
+    critical: false
     fix: "Explain why this model was chosen (practices.yaml)."
   - path: study.models_compared
-    critical: []
+    critical: false
   - path: study.guard_rail_refusals
-    critical: []
+    critical: false
   - path: study.coding_procedure
-    critical: []
+    critical: false
     fix: "Describe the iterative coding procedure (practices.yaml)."
   - path: model.fine_tuned
-    critical: []
+    critical: false
   - path: model.fine_tuning_data
-    critical: [self_run]
+    critical: true
     when: {field: model.fine_tuned, equals: true}
     fix: "Provide the fine-tuning data (path, DOI or URL)."
   - path: model.training_cutoff
-    critical: []
+    critical: false
     fix: "Copy the training data end date from the model card."
   - path: data.time_period
-    critical: []
+    critical: false
   - path: data.language
-    critical: []
+    critical: false
   - path: validation.after_prompt_freeze
-    critical: []
+    critical: false
     when: {field: validation.gold_sha256, known: true}
   - path: validation.gold_publicly_available
-    critical: []
+    critical: false
     when: {field: validation.gold_sha256, known: true}
   - path: validation.failure_analysis
-    critical: []
+    critical: false
     when: {field: validation.gold_sha256, known: true}
   - path: ethics.consent
-    critical: []
-  - path: ethics.data_processing_agreement
-    critical: []
-    when: {field: study.run_mode, equals: hosted_api}
+    critical: false
   - path: ethics.anonymization
-    critical: []
+    critical: false
   - path: ethics.data_minimization
-    critical: []
+    critical: false
   - path: ethics.storage_and_transfer
-    critical: []
+    critical: false
   - path: ethics.copyright_and_tos
-    critical: []
+    critical: false

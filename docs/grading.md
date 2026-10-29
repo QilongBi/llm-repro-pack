@@ -8,7 +8,7 @@ any disagreement is recorded as a conflict for the researcher to resolve.
 | Rank | Source | Provenance label |
 |---|---|---|
 | 0 | Researcher answers during packaging | `researcher_confirmed` / `researcher_provided` |
-| 1 | Researcher-provided environment package (Docker digest, conda export, lockfile, pip freeze, hardware info, raw API responses) | `researcher_provided` |
+| 1 | Researcher-provided environment package (Docker digest, conda export, lockfile, pip freeze, hardware info) | `researcher_provided` |
 | 2 | Run-time evidence: logs, metadata in outputs, archived requests and responses | `run_time_evidence` |
 | 3 | Code and config, read at the git commit that produced the outputs | `code_declared` |
 | 4 | Current environment, HF cache, model card, model profile defaults | `claude_inferred` (with basis) |
@@ -32,12 +32,16 @@ A field is locked when its value is known, its provenance is `run_time_evidence`
 
 ## Grades
 
+llm-repro-pack only builds grade A and B packages.
+
 | Grade | Rule |
 |---|---|
-| D | A core field is missing: model ID, prompt file hashes, data hash or labels |
-| C | Hosted API mode, unknown run mode, or any critical field not locked |
-| B | Self-run, every critical field locked, open-weight model (or fully open without a complete openness record) |
 | A | Self-run, every critical field locked, fully open model with training data, data version, training code commit and checkpoint locked |
+| B | Self-run, every critical field locked, open-weight model (or fully open without a complete openness record) |
+| not eligible | Any critical field not locked, or not self-run. `package.py` writes nothing, exits with code 3 and saves the missing items to `.llmrp/readiness.yaml` |
+
+Third-party hosted APIs are refused already during evidence collection: the provider
+controls weights, inference stack and hardware, so they can never reach A or B.
 
 Critical fields are listed in `templates/manifest.schema.yaml` (`critical:`) plus the
 profile fields marked `critical: true`. Conditional fields:

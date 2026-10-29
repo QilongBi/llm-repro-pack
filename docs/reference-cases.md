@@ -31,16 +31,12 @@
     default enters as `claude_inferred` and must be confirmed.
   - `chat_format`: harmony.
   - `harmony_rendering`: openai-harmony library, HF chat template, engine built-in
-    (vLLM, Ollama), or provider side (hosted API). Detected from code when possible.
+    (vLLM, Ollama). Detected from code when possible.
   - `label_extraction_channel`: final. Labels are taken from the final channel only
     (extraction rule `harmony_final`). The reasoning trace is never parsed for labels.
   - `reasoning_trace_archived` (recommended): whether the analysis channel was kept.
 - Quantization: the MoE weights ship in MXFP4. That is the original format, so
   `model.converted_or_quantized` stays false. GPUs without MXFP4 kernels and Apple
   Silicon dequantize, so cross-hardware results are statistical only.
-- Hosted runs (Groq, Together, OpenRouter ...) are grade C. Re-run them locally with
-  the public weights for a cross-mode agreement check:
-
-  ```
-  python <pkg>/scripts/reproduce.py --package <pkg> --engine vllm --revision <commit>
-  ```
+- Runs through hosted providers (Groq, Together, OpenRouter ...) are out of scope and are
+  refused. Run gpt-oss yourself (vLLM, transformers or Ollama) with a pinned revision.

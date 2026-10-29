@@ -41,7 +41,7 @@ fields:
       - {pattern: 'apply_chat_template', value: "tokenizer chat template (HF)"}
       - {pattern: 'from vllm|vllm serve|LLM\(', value: "engine built-in (vLLM)"}
       - {pattern: '\bollama\b', value: "engine built-in (Ollama)"}
-      - {pattern: 'chat/completions|from openai import', value: "provider-side (hosted API)"}
+      - {pattern: 'chat/completions', value: "OpenAI-compatible server run by the researcher (check its engine)"}
   reasoning_trace_archived:
     critical: false
     description: "Whether the analysis-channel reasoning trace was archived with the outputs."

@@ -21,10 +21,7 @@ class RunSpec:
     deterministic: bool = False
     template_kwargs: dict = field(default_factory=dict)
     extra_options: dict = field(default_factory=dict)  # e.g. Ollama 'think'
-    base_url: str | None = None
-    model_name: str | None = None
-    api_key_env: str | None = None
-    hosted_parameters: dict = field(default_factory=dict)
+    base_url: str | None = None                        # local server URL (Ollama)
 
     def dec(self, key: str) -> Any:
         v = self.decoding.get(key)

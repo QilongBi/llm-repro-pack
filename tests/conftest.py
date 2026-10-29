@@ -36,9 +36,9 @@ def do_select(project: Path, pairs: list[str]) -> None:
     confirm.cmd_select(project, pairs)
 
 
-def do_collect(project: Path, model_id: str, run_mode: str, hf_cache: Path | None = None,
+def do_collect(project: Path, model_id: str, hf_cache: Path | None = None,
                revision: str | None = None, model_path: str | None = None) -> dict:
-    args = argparse.Namespace(model_id=model_id, revision=revision, run_mode=run_mode,
+    args = argparse.Namespace(model_id=model_id, revision=revision,
                               hf_cache=str(hf_cache) if hf_cache else None, model_path=model_path,
                               hub=False, probe_cloud=False, hash_large_weights=False)
     return collect_env.collect(project, args)

@@ -10,17 +10,16 @@ ${grade_reason}
 |---|---|---|
 | A | Fully open model, self-run, all critical fields locked | Bit-identical on the same hardware class |
 | B | Open-weight model, self-run, all critical fields locked | Bit-identical on the same hardware class |
-| C | Some critical fields missing, or hosted API mode | Statistical reproduction (agreement metrics) |
-| D | Only archived outputs available | Downstream analysis only |
 
-A field is *locked* when its provenance is `run_time_evidence`, `researcher_provided`,
-`code_declared` or `researcher_confirmed`, its value is known, and no conflict is open.
+llm-repro-pack only builds packages that reach grade A or B. A field is *locked* when its
+provenance is `run_time_evidence`, `researcher_provided`, `code_declared` or
+`researcher_confirmed`, its value is known, and no conflict is open.
 
-## Missing or unlocked critical fields
+## Openness record still missing for grade A
 
 ${missing_critical}
 
-## How to raise the grade
+## How to reach grade A
 
 ${how_to_improve}
 

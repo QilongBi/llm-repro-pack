@@ -24,7 +24,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from common import field_value, load_labels, load_yaml, now_iso
 from compare import _jsonable, compare_labels, krippendorff_alpha_nominal
 
-PASS = ("revision", "repo_id", "base_url", "model_name", "api_key_env", "ollama_tag")
+PASS = ("revision", "repo_id", "base_url", "ollama_tag")
 
 
 def _run(pkg: Path, args, out: Path, spec: Path | None) -> int:

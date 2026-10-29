@@ -8,7 +8,7 @@ import sys
 
 from common import canonical_json, field_value, load_yaml, read_jsonl, read_records, sha256_text
 from conftest import confirm_all, do_collect, do_discover, do_package, do_select
-from fixtures import COMMIT, GPTOSS, OLMO, make_hf_cache, make_hosted, make_selfrun, hosted_selection, selfrun_selection
+from fixtures import COMMIT, OLMO, make_hf_cache, make_selfrun, selfrun_selection
 
 
 def _selfrun_pkg(tmp_path):
@@ -16,7 +16,7 @@ def _selfrun_pkg(tmp_path):
     hf = make_hf_cache(tmp_path / "hf", OLMO, [COMMIT])
     do_discover(p)
     do_select(p, selfrun_selection(p))
-    do_collect(p, OLMO, "self_run", hf)
+    do_collect(p, OLMO, hf)
     confirm_all(p)
     return do_package(p, tmp_path / "pkg")["package"]
 
@@ -80,20 +80,3 @@ def test_rebuild_dry_run_prints_commands(tmp_path):
     r = _run(pkg, "--rebuild", "--dry-run")
     assert r.returncode == 0
     assert "REBUILD:" in r.stdout and "requirements.lock" in r.stdout
-
-
-def test_cross_mode_reproduction_of_hosted_package(tmp_path):
-    p = make_hosted(tmp_path)
-    do_discover(p)
-    do_select(p, hosted_selection())
-    do_collect(p, GPTOSS, "hosted_api")
-    confirm_all(p)
-    pkg = do_package(p, tmp_path / "pkg")["package"]
-    output = (p / "runs" / "20260901T120000000000Z" / "model_output.txt").read_text(encoding="utf-8")
-    table = _mock_table(pkg, tmp_path / "mock.json", lambda r: output)
-    r = _run(pkg, "--engine", "mock", env_extra={"LLMRP_MOCK_RESPONSES": str(table)})
-    assert r.returncode == 0, r.stderr + r.stdout
-    metrics = json.loads((pkg / "reproduction" / "metrics.json").read_text(encoding="utf-8"))
-    assert metrics["n_compared"] == 6 and metrics["exact_match_rate"] == 1.0
-    report = (pkg / "reproduction" / "REPRODUCTION_REPORT.md").read_text(encoding="utf-8")
-    assert "cross-mode" in report.lower() or "Cross-mode" in report

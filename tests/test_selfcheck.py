@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-from conftest import do_collect, do_discover, do_package, do_select
-from fixtures import OLMO, make_hosted, make_selfrun, hosted_selection, selfrun_selection
+from conftest import confirm_all, do_collect, do_discover, do_package, do_select
+from fixtures import COMMIT, OLMO, make_hf_cache, make_selfrun, selfrun_selection
 import hash_files
 import secret_scan
 import selfcheck
@@ -9,11 +9,13 @@ import selfcheck
 FAKE_GROQ = "gsk_" + "A1b2C3d4E5f6G7h8I9j0K1l2M3n4"
 
 
-def _pkg(tmp_path):
+def _pkg(tmp_path, extra=()):
     p = make_selfrun(tmp_path)
+    hf = make_hf_cache(tmp_path / "hf", OLMO, [COMMIT])
     do_discover(p)
-    do_select(p, selfrun_selection(p))
-    do_collect(p, OLMO, "self_run")
+    do_select(p, selfrun_selection(p) + list(extra))
+    do_collect(p, OLMO, hf)
+    confirm_all(p)
     return p
 
 
@@ -35,14 +37,9 @@ def test_env_var_value_detected(tmp_path, monkeypatch):
     assert any("value_of_env_MY_PROVIDER_API_KEY" in e for e in res["selfcheck"]["errors"])
 
 
-def test_api_key_never_written_in_hosted_mode(tmp_path, monkeypatch):
-    monkeypatch.setenv("GROQ_API_KEY", FAKE_GROQ)
-    p = make_hosted(tmp_path)
-    (p / "endpoints.json").write_text('{"api_key_env": "GROQ_API_KEY"}', encoding="utf-8")
-    do_discover(p)
-    do_select(p, hosted_selection() + ["config=endpoints.json"])
-    do_collect(p, "openai/gpt-oss-20b", "hosted_api")
-    res = do_package(p, tmp_path / "pkg")
+def test_token_in_environment_never_written(tmp_path, monkeypatch):
+    monkeypatch.setenv("HF_TOKEN_FOR_TEST", FAKE_GROQ)
+    res = do_package(_pkg(tmp_path), tmp_path / "pkg")
     assert res["selfcheck"]["ok"], res["selfcheck"]["errors"]
     for f in res["package"].rglob("*"):
         if f.is_file():

@@ -36,7 +36,7 @@ validation:
 ethics:
   # 7. Consent of the people whose data is analysed, and whether they were told about LLM use.
   consent: ""
-  # 7. Data processing agreement with the API provider (hosted mode), or "not needed: self-run".
+  # 7. Data processing agreement, if any third party processed the data (normally not needed: self-run).
   data_processing_agreement: ""
   # 7. Anonymization or pseudonymization before sending data to a model.
   anonymization: ""

@@ -9,8 +9,7 @@ import sys
 from common import canonical_json, field_value, load_yaml, read_jsonl, read_records, sha256_text
 from conftest import confirm_all, do_collect, do_discover, do_package, do_select
 import confirm
-from fixtures import (COMMIT, GOLD, GPTOSS, OLMO, TEXTS, _w, make_hf_cache, make_hosted, make_selfrun,
-                      hosted_selection, selfrun_selection)
+from fixtures import COMMIT, GOLD, OLMO, _w, make_hf_cache, make_selfrun, selfrun_selection
 from prompt_lint import lint
 from validate import run_validation
 
@@ -34,12 +33,13 @@ def _selfrun(tmp_path, extra=()):
     hf = make_hf_cache(tmp_path / "hf", OLMO, [COMMIT])
     do_discover(p)
     do_select(p, selfrun_selection(p) + list(extra))
-    do_collect(p, OLMO, "self_run", hf)
+    do_collect(p, OLMO, hf)
     return p
 
 
 def test_validation_metrics_icr_subsets_and_errors(tmp_path):
     p = _selfrun(tmp_path, ["gold=gold_coders.csv"])
+    confirm_all(p)
     import argparse
     import package
     args = argparse.Namespace(project=p, out=tmp_path / "pkg", title=None, data_shareable=True, data_access=None,
@@ -127,28 +127,16 @@ ethics:
     assert m["study"]["model_choice_rationale"]["provenance"] == "researcher_provided"
 
 
-def test_hosted_checklist_flags_defaults_and_dpa(tmp_path):
-    p = make_hosted(tmp_path)
-    do_discover(p)
-    do_select(p, hosted_selection())
-    do_collect(p, GPTOSS, "hosted_api")
-    res = do_package(p, tmp_path / "pkg", data_shareable=False)
-    bp = res["best_practices"]
-    assert _status(bp, "Model hosted on own infrastructure") == "not_met"
-    assert _status(bp, "All parameters explicitly specified") == "not_met"
-    assert _status(bp, "Data processing agreement") == "not_documented"
-    assert _status(bp, "Open-source model with publicly known") == "partial"
-    m = load_yaml(res["package"] / "manifest.yaml")
-    assert field_value(m, "model.training_cutoff").startswith("2024-06")
-
 
 def test_archived_stability_runs(tmp_path):
     p = make_selfrun(tmp_path)
+    hf = make_hf_cache(tmp_path / "hf", OLMO, [COMMIT])
     labels = ["neutral"] + GOLD[1:]
     _w(p / "outputs" / "labels_repeat2.csv", "id,label\n" + "".join(f"t{i:02d},{g}\n" for i, g in enumerate(labels)))
     do_discover(p)
     do_select(p, selfrun_selection(p) + ["stability_runs=outputs/labels_repeat2.csv"])
-    do_collect(p, OLMO, "self_run")
+    do_collect(p, OLMO, hf)
+    confirm_all(p)
     res = do_package(p, tmp_path / "pkg")
     st = field_value(load_yaml(res["package"] / "manifest.yaml"), "stability.archived_runs")
     assert st["n_runs"] == 2 and 0 < st["krippendorff_alpha"] < 1
@@ -178,3 +166,12 @@ def test_stability_script_repeats_and_paraphrase(tmp_path):
     para = list(res["paraphrases"]["exact_match_vs_archived"].values())[0]
     assert para < 1.0  # the mock does not know the paraphrased prompt
     assert (pkg / "reproduction" / "stability" / "STABILITY_REPORT.md").exists()
+
+
+def test_engine_default_parameter_is_flagged(tmp_path):
+    p = _selfrun(tmp_path)
+    confirm.cmd_field(p, ["decoding.top_k=engine_default"], "researcher_provided", None, None)
+    confirm_all(p)
+    res = do_package(p, tmp_path / "pkg")
+    assert res["grade"]["eligible"]
+    assert _status(res["best_practices"], "All parameters explicitly specified") == "not_met"

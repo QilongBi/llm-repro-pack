@@ -9,8 +9,11 @@ Sources, best first:
 
 All candidates are kept. Conflicts are reported, never silently resolved.
 
+Only self-run studies are supported (a machine the researcher controlled: local, VM or HPC).
+Evidence of a third-party hosted API stops collection with an error.
+
 Usage:
-  python collect_env.py --project P --model-id REPO [--revision SHA] --run-mode self_run|hosted_api
+  python collect_env.py --project P --model-id REPO [--revision SHA]
                         [--hf-cache DIR] [--model-path DIR_OR_FILE] [--hub] [--probe-cloud]
                         [--hash-large-weights]
 """
@@ -53,8 +56,7 @@ KEY_MAP = {
     "quantization": "model.quantization", "quant_method": "model.quantization",
     "engine": "engine.name", "inference_engine": "engine.name", "backend": "engine.name",
     "engine_version": "engine.version",
-    "provider": "hosted_api.provider", "base_url": "hosted_api.base_url", "api_base": "hosted_api.base_url",
-    "api_key_env": "hosted_api.api_key_env",
+    "base_url": "engine.server_url", "api_base": "engine.server_url",
     "text_column": "data.text_column", "id_column": "data.id_column", "label_column": "outputs.label_column",
     "task_type": "study.task_type", "run_mode": "study.run_mode",
     "allowed_labels": "study.label_set", "label_set": "study.label_set", "labels": "study.label_set",
@@ -66,7 +68,7 @@ TIME_KEYS = ("created", "started_at_utc", "ended_at_utc", "timestamp", "start_ti
              "started_at", "ended_at", "finished_at", "created_at")
 SKIP_KEYS = {"messages", "content", "records", "predictions", "data", "items", "usage", "choices",
              "prompt", "system", "user_template", "few_shot", "logprobs", "input", "output"}
-SECTIONS = ("study", "model", "engine", "decoding", "data", "outputs", "hosted_api", "hardware", "prompt")
+SECTIONS = ("study", "model", "engine", "decoding", "data", "outputs", "hardware", "prompt")
 FILE_KEYS = {"data.path", "outputs.labels", "outputs.raw_outputs", "outputs.logs"}
 
 NUM = r"([0-9]*\.?[0-9]+)"
@@ -109,7 +111,6 @@ ENGINE_SIGNATURES = [
     ("ollama", r"\bollama\b"),
     ("transformers", r"AutoModelForCausalLM|pipeline\(\s*[\"']text-generation"),
 ]
-HOSTED_SIGNATURE = r"chat/completions|from openai import|import openai|\bgroq\b|together\.ai|api\.together"
 PROVIDERS = {"groq.com": "Groq", "together.xyz": "Together AI", "together.ai": "Together AI",
              "fireworks.ai": "Fireworks AI", "openrouter.ai": "OpenRouter", "deepinfra.com": "DeepInfra",
              "cerebras.ai": "Cerebras", "sambanova.ai": "SambaNova", "hyperbolic.xyz": "Hyperbolic",
@@ -132,7 +133,7 @@ def _num(s: Any) -> Any:
 
 
 class Evidence:
-    def __init__(self, project: Path, run_mode: str):
+    def __init__(self, project: Path, run_mode: str = "self_run"):
         self.project = project
         self.run_mode = run_mode
         self.cands: dict[str, list[dict]] = {}
@@ -236,7 +237,7 @@ def scan_obj(ev: Evidence, obj: Any, prov: str, source: str, kind: str, depth: i
         dotted = f"{prefix}.{kl}" if prefix else kl
         # Our own config layout: section.key maps directly.
         top = dotted.split(".")[0]
-        if kind == "config" and dotted in ("outputs.label_extraction_rule", "hosted_api.parameters") \
+        if kind == "config" and dotted in ("outputs.label_extraction_rule",) \
                 and isinstance(v, dict):
             ev.add(dotted, v, prov, source)
             continue
@@ -268,7 +269,6 @@ def scan_obj(ev: Evidence, obj: Any, prov: str, source: str, kind: str, depth: i
             _model_key(ev, kl, v, prov, source, kind, is_response)
             continue
         if kl == "reported_model" and isinstance(v, str):
-            ev.add("hosted_api.reported_model", v, prov, source)
             continue
         if kl in ("multi_label",) and isinstance(v, bool):
             ev.add("study.task_type", "multi_label" if v else "single_label", prov, source)
@@ -283,8 +283,6 @@ def scan_obj(ev: Evidence, obj: Any, prov: str, source: str, kind: str, depth: i
             if target == "outputs.label_extraction_rule" and isinstance(v, (dict, str)):
                 ev.add(target, v if isinstance(v, dict) else {"type": v}, prov, source)
                 continue
-            if target == "hosted_api.provider" and ev.run_mode != "hosted_api":
-                continue
             if not isinstance(v, (dict, list)):
                 ev.add(target, _num(v), prov, source)
                 continue
@@ -295,12 +293,6 @@ def scan_obj(ev: Evidence, obj: Any, prov: str, source: str, kind: str, depth: i
 
 
 def _model_key(ev: Evidence, key: str, v: str, prov: str, source: str, kind: str, is_response: bool) -> None:
-    if kind in ("request", "meta", "response") and ev.run_mode == "hosted_api":
-        if is_response:
-            ev.add("hosted_api.reported_model", v, prov, source)
-        else:
-            ev.add("hosted_api.model_name", v, prov, source)
-        return
     if re.fullmatch(r"[\w.\-]+:[\w.\-]+", v) and "/" not in v:
         ev.add("model.ollama_tag", v, prov, source)
     elif "/" in v and not v.startswith(("http", "/", ".")):
@@ -480,9 +472,7 @@ def collect_code(ev: Evidence, code_files: list[Path], config_files: list[Path],
             if re.search(r"VLLM_BATCH_INVARIANT|use_deterministic_algorithms\(\s*True|batch_invariant\s*=\s*True",
                          text):
                 ev.add("decoding.batch_invariant", True, prov, src)
-            if ev.run_mode == "hosted_api" and re.search(HOSTED_SIGNATURE, text):
-                ev.info.setdefault("hosted_client_code", []).append(src)
-    if engines and ev.run_mode == "self_run":
+    if engines:
         order = [n for n, _ in ENGINE_SIGNATURES]
         engines.sort(key=lambda e: order.index(e[0]))
         ev.add("engine.name", engines[0][0], prov, engines[0][1])
@@ -831,19 +821,15 @@ def add_current_env(ev: Evidence, env: dict) -> None:
     Where run-time or researcher evidence exists, differences are recorded in
     info.current_vs_run instead of being reported as conflicts.
     """
-    if ev.run_mode == "hosted_api":
-        ev.info["current_vs_run"] = {}
-        return  # the provider's stack is not the packaging machine
     prov, basis = "claude_inferred", "current environment at packaging time; may differ from the run"
     src = "env/current_environment.yaml"
     pairs = [("engine.os", env.get("os")), ("engine.python", env.get("python")), ("hardware.cpu", env.get("cpu"))]
     pairs += [(f"engine.libraries.{lib}", ver) for lib, ver in env.get("libraries", {}).items()]
-    if ev.run_mode == "self_run":
-        pairs += [("hardware.accelerator", env.get("accelerator")),
-                  ("hardware.accelerator_memory", env.get("accelerator_memory")),
-                  ("engine.driver", env.get("driver")), ("engine.cuda", env.get("cuda")),
-                  ("hardware.cloud_provider", env.get("cloud_provider")),
-                  ("hardware.instance_type", env.get("instance_type"))]
+    pairs += [("hardware.accelerator", env.get("accelerator")),
+              ("hardware.accelerator_memory", env.get("accelerator_memory")),
+              ("engine.driver", env.get("driver")), ("engine.cuda", env.get("cuda")),
+              ("hardware.cloud_provider", env.get("cloud_provider")),
+              ("hardware.instance_type", env.get("instance_type"))]
     diffs = {}
     for path, val in pairs:
         if val in (None, ""):
@@ -971,8 +957,9 @@ def collect(project: Path, args: argparse.Namespace) -> dict:
             out.extend(iter_files(_abs(project, e["path"])))
         return out
 
-    ev = Evidence(project, args.run_mode)
-    ev.add("study.run_mode", args.run_mode, "researcher_provided", "researcher input")
+    ev = Evidence(project)
+    ev.add("study.run_mode", "self_run", "researcher_provided", "researcher input",
+           note="only self-run studies are supported")
     ev.add("model.repo_id", args.model_id, "researcher_provided", "researcher input")
     if args.revision:
         ev.add("model.revision", args.revision, "researcher_provided", "researcher input")
@@ -1004,40 +991,23 @@ def collect(project: Path, args: argparse.Namespace) -> dict:
                 ev.add(key, val, "researcher_provided", ev.rel(pf), note="best-practice record")
     collect_code(ev, files("code"), files("config"), files("prompt_files"), run_end, profile)
 
-    # Hosted API specifics.
-    if args.run_mode == "hosted_api":
-        if req_params:
-            first = req_params[0]
-            ev.add("hosted_api.parameters", first, "run_time_evidence", "archived request payloads",
-                   note=None if all(values_equal(first, r) for r in req_params) else
-                   "parameters differ between requests; see outputs/requests")
-            for key, path in (("temperature", "decoding.temperature"), ("top_p", "decoding.top_p")):
-                if all(key not in r for r in req_params):
-                    ev.add(path, "not_set_provider_default", "run_time_evidence", "archived request payloads",
-                           note=f"{key} absent from every request; the provider default applied")
-        if ev.fingerprints:
-            ev.add("hosted_api.system_fingerprints", sorted(ev.fingerprints), "run_time_evidence",
-                   "archived raw responses")
-        resp = [p for p in files("raw_outputs") + files("logs") if "choices" in (read_text(p) or "")]
-        if resp:
-            ev.add("hosted_api.raw_responses", [ev.rel(p) for p in resp], "run_time_evidence", "archived files")
-        if rt_times:
-            ev.add("hosted_api.call_timestamps", {"first": rt_times[0].isoformat(), "last": rt_times[-1].isoformat(),
-                                                  "count": len(rt_times)}, "run_time_evidence",
-                   "timestamps in archived metadata")
-        elif mt:
-            ev.add("hosted_api.call_timestamps", {"first": min(mt).isoformat(), "last": max(mt).isoformat()},
-                   "claude_inferred", "file modified times", basis="no call timestamps saved; output file times")
-        for c in list(ev.cands.get("hosted_api.base_url", [])):
-            host = re.sub(r"^https?://", "", str(c["value"])).split("/")[0].lower()
-            for dom, name in PROVIDERS.items():
-                if dom in host:
-                    ev.add("hosted_api.provider", name, "claude_inferred", c["source"],
-                           basis=f"derived from base_url host {host}")
-            if host.startswith(("127.0.0.1", "localhost")):
-                ev.warnings.append("hosted_api.base_url is a loopback address. If the researcher served the "
-                                   "model themselves, the run is self_run, not hosted_api.")
-        ev.add("model.repo_id", args.model_id, "researcher_provided", "researcher input")
+    # Third-party hosted APIs are out of scope (they can only reach statistical reproduction).
+    hosted = []
+    for c in ev.cands.get("engine.server_url", []):
+        host = re.sub(r"^https?://", "", str(c["value"])).split("/")[0].lower()
+        for dom, name in PROVIDERS.items():
+            if dom in host:
+                hosted.append(f"{name} ({c['value']}, from {c['source']})")
+    if hosted:
+        raise SystemExit("ERROR: the run used a third-party hosted API: " + "; ".join(sorted(set(hosted))) +
+                         ". llm-repro-pack only packages self-run studies that can reach grade A or B. "
+                         "Re-run the study on a machine you control with pinned open weights.")
+    if req_params:
+        for key, path in (("temperature", "decoding.temperature"), ("top_p", "decoding.top_p"),
+                          ("top_k", "decoding.top_k")):
+            if all(key not in r for r in req_params):
+                ev.add(path, "engine_default", "run_time_evidence", "archived request payloads",
+                       note=f"{key} absent from every request; the server's default applied")
 
     # Run date.
     if rt_times:
@@ -1075,11 +1045,10 @@ def collect(project: Path, args: argparse.Namespace) -> dict:
     collect_data_outputs(ev, sel, disc.get("columns", {}), profile, files("raw_outputs"))
 
     # Lowest tier: model cache and current environment.
-    if args.run_mode == "self_run":
-        collect_model(ev, args.model_id, args, run_start, run_end, profile)
-        eng, _ = resolve_candidates("engine.name", ev.cands.get("engine.name", []))
-        if eng.get("value") == "ollama" or ev.cands.get("model.ollama_tag"):
-            collect_ollama(ev)
+    collect_model(ev, args.model_id, args, run_start, run_end, profile)
+    eng, _ = resolve_candidates("engine.name", ev.cands.get("engine.name", []))
+    if eng.get("value") == "ollama" or ev.cands.get("model.ollama_tag"):
+        collect_ollama(ev)
     cur = current_environment(args.probe_cloud)
     add_current_env(ev, cur)
     derive(ev)
@@ -1088,7 +1057,7 @@ def collect(project: Path, args: argparse.Namespace) -> dict:
     result = {
         "generated_at": now_iso(),
         "project": str(project),
-        "inputs": {"model_id": args.model_id, "revision": args.revision, "run_mode": args.run_mode,
+        "inputs": {"model_id": args.model_id, "revision": args.revision, "run_mode": "self_run",
                    "hf_cache": args.hf_cache, "model_path": args.model_path},
         "candidates": ev.cands,
         "warnings": ev.warnings,
@@ -1103,7 +1072,6 @@ def main() -> int:
     ap.add_argument("--project", type=Path, required=True)
     ap.add_argument("--model-id", required=True)
     ap.add_argument("--revision")
-    ap.add_argument("--run-mode", choices=["self_run", "hosted_api"], required=True)
     ap.add_argument("--hf-cache")
     ap.add_argument("--model-path")
     ap.add_argument("--hub", action="store_true", help="Query the Hugging Face Hub (network).")

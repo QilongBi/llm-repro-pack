@@ -155,7 +155,6 @@ class Builder:
                   "package": {"tool": TOOL_NAME, "tool_version": TOOL_VERSION, "created_at": now_iso(),
                               "title": self.opts.title or self.project.name}}
         conflicts = self.resolve_all()
-        run_mode = field_value(self.m, "study.run_mode") or "self_run"
 
         for role in ROLE_DEST:
             if role == "data" and not self.opts.data_shareable:
@@ -165,13 +164,12 @@ class Builder:
             self.copy_role(role)
         self._data_fields()
         self._output_fields()
-        self._prompt_fields(run_mode)
+        self._prompt_fields()
         self._lint()
         self._validation()
         self._stability()
         self._profile_fields()
         self._env_files()
-        self._fix_paths()
         self._copy_scripts()
         if self.opts.archive_weights:
             self._archive_weights()
@@ -239,7 +237,7 @@ class Builder:
         if logs:
             self.put("outputs.logs", logs, "researcher_confirmed", "selection.yaml")
 
-    def _prompt_fields(self, run_mode: str) -> None:
+    def _prompt_fields(self) -> None:
         recs = self.copied.get("prompt_files") or []
         if recs:
             self.put("prompt.files_sha256", {r["package_path"]: r["sha256"] for r in recs},
@@ -291,7 +289,7 @@ class Builder:
         if self.opts.max_rendered and total > self.opts.max_rendered:
             sampled = ri.deterministic_sample(requests, self.opts.max_rendered)
         applied = False
-        if run_mode == "self_run" and self.opts.render_chat_template:
+        if self.opts.render_chat_template:
             snap = self._snapshot_path()
             if snap:
                 prof = get_profile(field_value(self.m, "model_profile.name") or "default")
@@ -456,11 +454,6 @@ class Builder:
             if is_field(f):
                 hw.append(f"{k}: {f['value']}  [{f['provenance']}; source {f['source']}]")
         (self.out / "env" / "hardware.txt").write_text("\n".join(hw) + "\n", encoding="utf-8", newline="\n")
-
-    def _fix_paths(self) -> None:
-        f = get_path(self.m, "hosted_api.raw_responses")
-        if is_field(f) and isinstance(f["value"], list):
-            f["value"] = [self.path_map.get(v, v) for v in f["value"]]
 
     def _copy_scripts(self) -> None:
         dst = self.out / "scripts"

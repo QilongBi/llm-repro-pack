@@ -1,4 +1,10 @@
-"""Compute the reproducibility grade (A-D) from manifest.yaml and the schema.
+"""Compute the reproducibility grade from manifest.yaml and the schema.
+
+The skill only produces grade A or B packages:
+  A  fully open model, self-run, every critical field locked (incl. the openness record)
+  B  open-weight model (or fully open without a complete openness record), self-run,
+     every critical field locked
+Anything else is "not eligible": the package is not built, and the missing items are listed.
 
 Usage: python grade.py <package_dir>   (prints the grade, updates manifest.yaml)
 """
@@ -15,8 +21,7 @@ from model_profiles import get_profile
 GRADE_MEANING = {
     "A": "bit-identical reproduction expected on the same hardware class; fully open model",
     "B": "bit-identical reproduction expected on the same hardware class; open-weight model",
-    "C": "statistical reproduction only (agreement metrics)",
-    "D": "downstream analysis of archived outputs only",
+    None: "not eligible: this skill only packages runs that reach grade A or B",
 }
 
 
@@ -44,8 +49,8 @@ def applicable(m: dict, entry: dict) -> bool:
     return condition(m, entry.get("when"))
 
 
-def critical_in(m: dict, entry: dict, mode: str) -> bool:
-    if mode not in (entry.get("critical") or []):
+def is_critical(m: dict, entry: dict) -> bool:
+    if entry.get("critical") is not True:
         return False
     if not applicable(m, entry):
         return False
@@ -56,12 +61,9 @@ def critical_in(m: dict, entry: dict, mode: str) -> bool:
 
 def profile_entries(m: dict) -> list[dict]:
     prof = get_profile(field_value(m, "model_profile.name") or "default")
-    out = []
-    for fname, spec in (prof.get("fields") or {}).items():
-        out.append({"path": f"model_profile.{fname}",
-                    "critical": ["self_run", "hosted_api"] if spec.get("critical") else [],
-                    "fix": f"Record {fname}: {spec.get('description', '')}".strip()})
-    return out
+    return [{"path": f"model_profile.{fname}", "critical": bool(spec.get("critical")),
+             "fix": f"Record {fname}: {spec.get('description', '')}".strip()}
+            for fname, spec in (prof.get("fields") or {}).items()]
 
 
 def _reason(f: Any) -> str:
@@ -79,72 +81,52 @@ def _reason(f: Any) -> str:
 def grade(m: dict) -> dict:
     schema = load_yaml(resource_path("templates/manifest.schema.yaml"), {})
     entries = list(schema.get("fields", [])) + profile_entries(m)
-    mode = field_value(m, "study.run_mode")
-    mode_known = mode in ("self_run", "hosted_api")
-    eval_mode = mode if mode_known else "self_run"
-
-    core_missing = [p for p in schema.get("core_fields", []) if not is_known(get_path(m, p))]
     critical_missing, a_missing, recommended_missing = [], [], []
     for e in entries:
         f = get_path(m, e["path"])
-        if critical_in(m, e, eval_mode):
+        if is_critical(m, e):
             if not is_locked(f):
                 item = {"field": e["path"], "reason": _reason(f), "fix": e.get("fix", "")}
                 (a_missing if e.get("required_for") == "A" else critical_missing).append(item)
-        elif applicable(m, e) and not e.get("critical") and not is_known(f):
+        elif applicable(m, e) and e.get("critical") is not True and not is_known(f):
             recommended_missing.append({"field": e["path"], "fix": e.get("fix", "")})
 
+    mode = field_value(m, "study.run_mode")
+    if mode != "self_run":
+        critical_missing.insert(0, {"field": "study.run_mode", "reason": f"run mode is {mode!r}",
+                                    "fix": "Only self-run studies (a machine the researcher controlled) are supported."})
     openness = field_value(m, "model.openness")
-    openness_locked = is_locked(get_path(m, "model.openness"))
     reasons = []
-    if core_missing:
-        g = "D"
-        reasons.append("Core fields missing: " + ", ".join(core_missing) + ". The run cannot be re-executed.")
-    elif not mode_known:
-        g = "C"
-        reasons.append("Run mode unknown.")
-    elif mode == "hosted_api":
-        g = "C"
-        reasons.append("Hosted API mode: the provider controls weights, inference stack and hardware, so "
-                       "only statistical reproduction is possible. Re-running in self_run mode with the "
-                       "public weights gives a cross-mode agreement check.")
-    elif critical_missing:
-        g = "C"
-        reasons.append(f"{len(critical_missing)} critical field(s) not locked.")
-    elif openness == "fully_open" and openness_locked and not a_missing:
+    if critical_missing:
+        g = None
+        reasons.append(f"{len(critical_missing)} critical field(s) not locked. This skill only packages runs "
+                       "that reach grade A or B, so no package was built.")
+    elif openness == "fully_open" and not a_missing:
         g = "A"
         reasons.append("Fully open model, self-run, all critical fields locked.")
     else:
         g = "B"
-        if openness == "fully_open" and a_missing:
+        if openness == "fully_open":
             reasons.append("Fully open model, but the openness record is incomplete, so grade A is not reached.")
         else:
             reasons.append("Open-weight model, self-run, all critical fields locked. Grade B is the maximum "
                            "for open-weight models.")
 
-    improve = []
-    for item in critical_missing + (a_missing if openness == "fully_open" else []):
-        improve.append(f"{item['field']} ({item['reason']}): {item['fix'] or 'provide or confirm the value.'}")
-    if mode == "hosted_api":
-        improve.append("Re-run the study in self_run mode with pinned public weights to reach grade B or A.")
-    if g == "D":
-        improve.insert(0, "Provide the prompt files, the input data and the model ID so the run can be re-executed.")
+    improve = [f"{i['field']} ({i['reason']}): {i['fix'] or 'provide or confirm the value.'}"
+               for i in critical_missing + (a_missing if openness == "fully_open" else [])]
 
     acc = field_value(m, "hardware.accelerator")
-    notes = [] if mode == "hosted_api" else [f"Bit-identical results are expected only on the same hardware class ({acc or 'unknown'}) with "
+    notes = [f"Bit-identical results are expected only on the same hardware class ({acc or 'unknown'}) with "
              "the same engine version, precision and batch size. Other hardware (e.g. Apple Silicon vs "
-             "NVIDIA, or GPUs with and without MXFP4 support) gives statistical reproduction only."]
-    if mode == "hosted_api":
-        notes.append("Hosted API: the provider may change weights, quantization, inference stack or hardware "
-                     "behind the same model name. Archived raw responses and system fingerprints are the only "
-                     "record of what was served.")
+             "NVIDIA, or GPUs with and without MXFP4 support) gives statistical agreement only; judge it "
+             "with Cohen's kappa and Krippendorff's alpha."]
     if field_value(m, "model.converted_or_quantized") is True:
         notes.append("Converted or quantized weights were used instead of the original release. Reproduce "
                      "with the same converted artifact (see model.format, model.quantization, model.ollama_digest).")
-    if field_value(m, "decoding.batch_invariant") is not True and mode == "self_run":
+    if field_value(m, "decoding.batch_invariant") is not True:
         notes.append("Batch-invariant mode was not recorded as on. Results can depend on batch size and "
                      "request order; keep both identical when reproducing.")
-    return {"grade": g, "meaning": GRADE_MEANING[g], "reasons": reasons,
+    return {"grade": g, "eligible": g in ("A", "B"), "meaning": GRADE_MEANING[g], "reasons": reasons,
             "critical_missing": critical_missing, "a_only_missing": a_missing if openness == "fully_open" else [],
             "recommended_missing": recommended_missing, "how_to_improve": improve, "notes": notes}
 
@@ -158,12 +140,12 @@ def main() -> int:
     res = grade(m)
     m["grade"] = res
     save_yaml(pkg / "manifest.yaml", m)
-    print(f"Grade {res['grade']}: {res['meaning']}")
+    print(f"Grade {res['grade'] or '-'}: {res['meaning']}")
     for r in res["reasons"]:
         print("  " + r)
     for i in res["how_to_improve"]:
         print("  - " + i)
-    return 0
+    return 0 if res["eligible"] else 1
 
 
 if __name__ == "__main__":

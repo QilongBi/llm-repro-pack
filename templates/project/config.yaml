@@ -1,6 +1,6 @@
 # Run configuration (llm-repro-pack recommended layout).
 # Fill in what you used. Leave a value out rather than guessing.
-run_mode: self_run            # self_run | hosted_api
+run_mode: self_run            # only self_run is supported (local machine, own VM or HPC node)
 task:
   type: single_label          # single_label | multi_label
   multi_label_separator: ";"
@@ -29,9 +29,3 @@ outputs:
   id_column: id
   label_column: label
   raw_outputs: outputs/raw_outputs.jsonl
-# Hosted API mode only. Never put the key itself here.
-hosted_api:
-  provider: ""
-  base_url: ""
-  model_name: ""
-  api_key_env: ""

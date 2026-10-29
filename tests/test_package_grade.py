@@ -4,8 +4,7 @@ import pytest
 
 from common import field_value, get_path, load_yaml
 from conftest import confirm_all, do_collect, do_discover, do_package, do_select
-from fixtures import (COMMIT, GPTOSS, OLMO, make_hf_cache, make_hosted, make_selfrun, hosted_selection,
-                      selfrun_selection)
+from fixtures import COMMIT, GPTOSS, OLMO, make_hf_cache, make_selfrun, selfrun_selection
 
 
 def _prepare_selfrun(tmp_path, model_id=OLMO, extra_config="", quant=None):
@@ -13,17 +12,19 @@ def _prepare_selfrun(tmp_path, model_id=OLMO, extra_config="", quant=None):
     hf = make_hf_cache(tmp_path / "hf", model_id, [COMMIT], quant=quant)
     do_discover(p, labels=["outputs/labels.csv"])
     do_select(p, selfrun_selection(p) + ["gold=gold.csv"])
-    do_collect(p, model_id, "self_run", hf)
+    do_collect(p, model_id, hf)
     return p
 
 
-def test_olmo_unconfirmed_is_grade_c(tmp_path):
+def test_unconfirmed_run_is_not_packaged(tmp_path):
     p = _prepare_selfrun(tmp_path)
     res = do_package(p, tmp_path / "pkg")
-    assert res["grade"]["grade"] == "C"
+    assert res["grade"]["grade"] is None and res["grade"]["eligible"] is False
+    assert res["package"] is None and not (tmp_path / "pkg").exists()
     reasons = {i["field"]: i["reason"] for i in res["grade"]["critical_missing"]}
     assert reasons["model.weight_files"] == "inferred, not confirmed"
-    assert res["selfcheck"]["ok"], res["selfcheck"]["errors"]
+    ready = load_yaml(p / ".llmrp" / "readiness.yaml")
+    assert ready["eligible"] is False
 
 
 def test_olmo_confirmed_reaches_grade_a(tmp_path):
@@ -73,40 +74,25 @@ def test_gpt_oss_self_run_is_capped_at_b(tmp_path):
     assert res["grade"]["grade"] == "B", res["grade"]
 
 
-def test_gpt_oss_missing_profile_field_is_c(tmp_path):
+def test_gpt_oss_missing_profile_field_is_not_packaged(tmp_path):
     p = _prepare_selfrun(tmp_path, model_id=GPTOSS)
     res = do_package(p, tmp_path / "pkg")
     missing = {i["field"] for i in res["grade"]["critical_missing"]}
     assert "model_profile.reasoning_effort" in missing
-    assert res["grade"]["grade"] == "C"
+    assert res["grade"]["eligible"] is False
 
 
-def test_hosted_is_grade_c(tmp_path):
-    p = make_hosted(tmp_path)
-    do_discover(p)
-    do_select(p, hosted_selection())
-    do_collect(p, GPTOSS, "hosted_api")
-    confirm_all(p)
-    res = do_package(p, tmp_path / "pkg", data_shareable=False, data_access="Ask the authors.")
-    assert res["grade"]["grade"] == "C"
-    assert res["selfcheck"]["ok"], res["selfcheck"]["errors"]
-    m = load_yaml(res["package"] / "manifest.yaml")
-    assert field_value(m, "prompt.rendered_inputs_complete") is True
-    assert get_path(m, "prompt.system_prompt")["provenance"] == "run_time_evidence"
-    assert field_value(m, "data.path") == "not_shared"
-    assert (res["package"] / "data" / "ACCESS.md").exists()
-    assert not (res["package"] / "data" / "data.jsonl").exists()
-    raw = field_value(m, "hosted_api.raw_responses")
-    assert all((res["package"] / r).exists() for r in raw)
 
-
-def test_only_outputs_is_grade_d(tmp_path):
+def test_only_outputs_is_not_packaged(tmp_path):
     p = make_selfrun(tmp_path)
     do_discover(p)
     do_select(p, ["labels=outputs/labels.csv"])
-    do_collect(p, OLMO, "self_run")
+    do_collect(p, OLMO)
+    confirm_all(p)
     res = do_package(p, tmp_path / "pkg", data_shareable=False)
-    assert res["grade"]["grade"] == "D"
+    assert res["grade"]["eligible"] is False
+    missing = {i["field"] for i in res["grade"]["critical_missing"]}
+    assert {"prompt.files_sha256", "data.sha256"} <= missing
 
 
 def test_package_inside_project_refused(tmp_path):
@@ -120,6 +106,6 @@ def test_archive_weights_requires_permissive_license(tmp_path):
     hf = make_hf_cache(tmp_path / "hf", "meta-llama/Llama-3.1-8B-Instruct", [COMMIT], license_="llama3.1")
     do_discover(p)
     do_select(p, selfrun_selection(p))
-    do_collect(p, "meta-llama/Llama-3.1-8B-Instruct", "self_run", hf)
+    do_collect(p, "meta-llama/Llama-3.1-8B-Instruct", hf)
     with pytest.raises(SystemExit):
         do_package(p, tmp_path / "pkg", archive_weights=True)

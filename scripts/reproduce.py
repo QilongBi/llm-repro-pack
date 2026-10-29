@@ -99,8 +99,6 @@ def _fmt(v) -> str:
 
 def report(pkg: Path, m: dict, args, verification: list[str], diff: list[str], metrics: dict | None,
            hw_now: str) -> str:
-    original = field_value(m, "study.run_mode")
-    cross = original == "hosted_api" and args.engine not in ("hosted_api", "mock")
     g = (m.get("grade") or {}).get("grade", "?")
     if metrics:
         mt = "| Metric | Value |\n|---|---|\n" + "\n".join(
@@ -116,18 +114,17 @@ def report(pkg: Path, m: dict, args, verification: list[str], diff: list[str], m
         interp = "No comparison was made."
     elif metrics.get("exact_match_rate") == 1.0:
         interp = "All compared labels match the archived labels exactly."
-    elif g in ("A", "B") and same_hw and not cross and not diff:
+    elif same_hw and not diff:
         interp = ("Labels differ although the package is grade " + g + " and the hardware class and library "
                   "versions match. Check batch size, request order and engine settings.")
     else:
-        interp = ("Exact identity was not expected here (" + ("cross-mode run; " if cross else "") +
+        interp = ("Exact identity was not expected here (" +
                   ("different hardware; " if not same_hw else "") + ("library versions differ; " if diff else "") +
                   f"package grade {g}). Judge agreement by kappa and alpha.")
     t = Template(resource_path("templates/REPRODUCTION_REPORT.md.tmpl").read_text(encoding="utf-8"))
     return t.safe_substitute(
         tool=TOOL_NAME, tool_version=TOOL_VERSION, created_at=now_iso(), package=str(pkg), grade=g,
-        original_mode=original, engine=args.engine,
-        cross_mode="yes: hosted API package re-run with public weights" if cross else "no",
+        engine=args.engine,
         n_compared=(metrics or {}).get("n_compared", 0), sampled=args.sample or "no",
         hardware_now=hw_now, hardware_then=field_value(m, "hardware.accelerator") or "unknown",
         verification="All checks passed." if not verification else "\n".join(f"- {e}" for e in verification),
@@ -144,7 +141,7 @@ def main() -> int:
     ap.add_argument("--rebuild", action="store_true")
     ap.add_argument("--dry-run", action="store_true")
     ap.add_argument("--out", type=Path)
-    for opt in ("--revision", "--repo-id", "--base-url", "--model-name", "--api-key-env", "--ollama-tag"):
+    for opt in ("--revision", "--repo-id", "--base-url", "--ollama-tag"):
         ap.add_argument(opt)
     args = ap.parse_args()
     pkg = args.package.resolve()
@@ -179,7 +176,7 @@ def main() -> int:
            "--out", str(out)]
     if args.sample:
         cmd += ["--sample", str(args.sample)]
-    for opt in ("revision", "repo_id", "base_url", "model_name", "api_key_env", "ollama_tag"):
+    for opt in ("revision", "repo_id", "base_url", "ollama_tag"):
         if getattr(args, opt):
             cmd += ["--" + opt.replace("_", "-"), getattr(args, opt)]
     r = subprocess.run(cmd)

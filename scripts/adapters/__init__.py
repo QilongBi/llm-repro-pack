@@ -11,7 +11,7 @@ import importlib.util
 import os
 from pathlib import Path
 
-BUILTIN = ("transformers", "vllm", "ollama", "hosted_api", "mock")
+BUILTIN = ("transformers", "vllm", "ollama", "mock")
 
 
 def get_adapter(name: str):

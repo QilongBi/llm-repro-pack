@@ -28,25 +28,15 @@ def _short(v: Any, n: int = 80) -> str:
 
 
 def reproduce_command(m: dict) -> str:
-    mode = field_value(m, "study.run_mode")
-    if mode == "hosted_api":
-        env = field_value(m, "hosted_api.api_key_env") or "PROVIDER_API_KEY"
-        return (f"export {env}=...   # never write the key to a file\n"
-                f"   python scripts/reproduce.py --package . --engine hosted_api --api-key-env {env}")
     eng = field_value(m, "engine.name")
     eng = eng if eng in ("transformers", "vllm", "ollama") else "transformers"
     return f"python scripts/reproduce.py --package . --engine {eng}"
 
 
 def expected(m: dict, g: dict) -> str:
-    if g["grade"] in ("A", "B"):
-        return ("Re-running with the same engine version, precision, batch size and hardware class should "
-                "reproduce the archived raw outputs exactly (exact match rate 1.0). On different hardware "
-                "expect high but imperfect agreement; judge it by Cohen's kappa and Krippendorff's alpha.")
-    if g["grade"] == "C":
-        return ("Exact output identity is not expected. Judge the reproduction by agreement with the archived "
-                "labels (exact match rate, Cohen's kappa, Krippendorff's alpha).")
-    return "The run cannot be re-executed from this package. Use the archived outputs for downstream analysis."
+    return ("Re-running with the same engine version, precision, batch size and hardware class should "
+            "reproduce the archived raw outputs exactly (exact match rate 1.0). On different hardware "
+            "expect high but imperfect agreement; judge it by Cohen's kappa and Krippendorff's alpha.")
 
 
 def readme(m: dict) -> str:
@@ -62,9 +52,8 @@ def readme(m: dict) -> str:
         title=m["package"]["title"], tool=TOOL_NAME, tool_version=TOOL_VERSION,
         created_at=m["package"]["created_at"], repo_id=_v(m, "model.repo_id"), revision=_v(m, "model.revision"),
         openness=_v(m, "model.openness"), run_mode=_v(m, "study.run_mode"),
-        engine=f"{_v(m, 'engine.name')} {_v(m, 'engine.version', '')}".strip()
-        if field_value(m, "study.run_mode") != "hosted_api" else f"hosted: {_v(m, 'hosted_api.provider')}",
-        hardware=hw if field_value(m, "study.run_mode") != "hosted_api" else "provider-controlled",
+        engine=f"{_v(m, 'engine.name')} {_v(m, 'engine.version', '')}".strip(),
+        hardware=hw,
         n_items=_v(m, "data.n_items"), grade=g["grade"], grade_meaning=g["meaning"],
         reproduce_command=reproduce_command(m), data_section=data_sec, expected_result=expected(m, g))
 
@@ -160,8 +149,8 @@ def prompt_codebook(m: dict, pkg: Path) -> str:
              "Everything needed to reproduce the LLM coding: categories, prompts, examples and settings. "
              "Generated from `manifest.yaml`; the prompt files in `prompts/` are authoritative.", "",
              "## Model and settings", "", "| Setting | Value | Provenance |", "|---|---|---|"]
-    rows = [("model", "model.repo_id"), ("revision", "model.revision"), ("hosted model name", "hosted_api.model_name"),
-            ("provider", "hosted_api.provider"), ("engine", "engine.name"), ("engine version", "engine.version"),
+    rows = [("model", "model.repo_id"), ("revision", "model.revision"),
+            ("engine", "engine.name"), ("engine version", "engine.version"),
             ("temperature", "decoding.temperature"), ("top_p", "decoding.top_p"), ("top_k", "decoding.top_k"),
             ("seed", "decoding.seed"), ("max tokens", "decoding.max_tokens"), ("batch size", "decoding.batch_size"),
             ("precision", "decoding.precision")]

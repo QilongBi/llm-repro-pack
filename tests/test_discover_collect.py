@@ -47,7 +47,7 @@ def test_collect_requires_confirmed_selection(tmp_path):
     p = make_selfrun(tmp_path)
     do_discover(p)
     with pytest.raises(SystemExit):
-        do_collect(p, OLMO, "self_run")
+        do_collect(p, OLMO)
 
 
 def test_evidence_hierarchy_and_provenance(tmp_path):
@@ -55,7 +55,7 @@ def test_evidence_hierarchy_and_provenance(tmp_path):
     hf = make_hf_cache(tmp_path / "hf", OLMO, [COMMIT])
     do_discover(p)
     do_select(p, selfrun_selection(p))
-    ev = do_collect(p, OLMO, "self_run", hf)
+    ev = do_collect(p, OLMO, hf)
     temp, conflict = _best(ev, "decoding.temperature")
     assert conflict is None and temp["value"] == 0.0 and temp["provenance"] == "run_time_evidence"
     ver, _ = _best(ev, "engine.version")
@@ -80,7 +80,7 @@ def test_conflict_is_reported_not_silently_resolved(tmp_path):
     p = make_selfrun(tmp_path, conflict=True)
     do_discover(p)
     do_select(p, selfrun_selection(p))
-    ev = do_collect(p, OLMO, "self_run")
+    ev = do_collect(p, OLMO)
     best, conflict = _best(ev, "decoding.temperature")
     assert conflict is not None
     assert best["conflict"] is True
@@ -92,7 +92,7 @@ def test_posthoc_environment_export_is_flagged(tmp_path):
     p = make_selfrun(tmp_path, posthoc=True)
     do_discover(p)
     do_select(p, selfrun_selection(p))
-    ev = do_collect(p, OLMO, "self_run")
+    ev = do_collect(p, OLMO)
     assert any("Post-hoc export" in w for w in ev["warnings"])
     torch = ev["candidates"]["engine.libraries.torch"][0]
     assert "post-hoc export" in torch["note"]
@@ -111,25 +111,17 @@ def test_ambiguous_hf_snapshots_are_reported(tmp_path):
         os.utime(hf / ("models--" + OLMO.replace("/", "--")) / "snapshots" / c, (1, 1))
     do_discover(p)
     do_select(p, selfrun_selection(p))
-    ev = do_collect(p, OLMO, "self_run", hf)
+    ev = do_collect(p, OLMO, hf)
     assert any("Ambiguous" in w for w in ev["warnings"])
     _, conflict = _best(ev, "model.revision")
     assert conflict is not None
 
 
-def test_hosted_evidence(tmp_path):
+def test_hosted_api_run_is_refused(tmp_path):
+    import pytest
     p = make_hosted(tmp_path)
     do_discover(p)
     do_select(p, hosted_selection())
-    ev = do_collect(p, "openai/gpt-oss-20b", "hosted_api")
-    assert _best(ev, "hosted_api.provider")[0]["value"] == "Groq"
-    assert _best(ev, "hosted_api.model_name")[0]["value"] == "openai/gpt-oss-20b"
-    assert _best(ev, "hosted_api.system_fingerprints")[0]["value"] == ["fp_test_123"]
-    assert _best(ev, "decoding.temperature")[0]["value"] == "not_set_provider_default"
-    assert _best(ev, "decoding.max_tokens")[0]["value"] == 4096
-    ts, _ = _best(ev, "hosted_api.call_timestamps")
-    assert ts["provenance"] == "run_time_evidence"
-    assert _best(ev, "model_profile.reasoning_trace_archived")[0]["value"] is True
-    rule, _ = _best(ev, "outputs.label_extraction_rule")
-    assert rule["value"]["type"] == "json_predictions"
-    assert _best(ev, "study.label_set")[0]["value"] == ["question", "complaint", "praise"]
+    with pytest.raises(SystemExit) as exc:
+        do_collect(p, "openai/gpt-oss-20b")
+    assert "hosted API" in str(exc.value) and "Groq" in str(exc.value)

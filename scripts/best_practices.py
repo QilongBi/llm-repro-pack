@@ -2,7 +2,7 @@
 Large Language Models" (arXiv:2402.05129). Deterministic rules on manifest.yaml.
 
 Status per item: met | partial | not_met | not_documented | n/a.
-The checklist is separate from the A-D reproducibility grade.
+The checklist is separate from the A/B reproducibility grade.
 """
 from __future__ import annotations
 
@@ -22,8 +22,6 @@ def _item(point: str, req: str, status: str, evidence: str) -> dict:
 
 
 def evaluate(m: dict) -> dict:
-    mode = field_value(m, "study.run_mode")
-    hosted = mode == "hosted_api"
     items: list[dict] = []
     P1, P2, P3, P4, P5, P6, P7, P8, P9 = (
         "1 Model choice", "2 Systematic coding procedure", "3 Prompt codebook", "4 Validation",
@@ -35,19 +33,10 @@ def evaluate(m: dict) -> dict:
     items.append(_item(P1, "Open-source model with publicly known training data",
                        "met" if openness == "fully_open" else ("partial" if openness == "open_weight" else "not_documented"),
                        f"model.openness = {openness}"))
-    if hosted:
-        pinned = _known(m, "hosted_api.model_name") and _known(m, "hosted_api.system_fingerprints")
-        items.append(_item(P1, "Fixed, documented model version that stays available",
-                           "partial" if pinned or _known(m, "hosted_api.model_name") else "not_met",
-                           "hosted API: the provider controls the version; model name"
-                           + (" and system fingerprint recorded" if pinned else " recorded")))
-        items.append(_item(P1, "Model hosted on own infrastructure", "not_met",
-                           "hosted API run; self-hosting is preferred for control, privacy and replicability"))
-    else:
-        items.append(_item(P1, "Fixed, documented model version that stays available",
-                           "met" if is_locked(get_path(m, "model.revision")) else "not_met",
-                           f"model.revision = {field_value(m, 'model.revision')}"))
-        items.append(_item(P1, "Model hosted on own infrastructure", "met", "self-run"))
+    items.append(_item(P1, "Fixed, documented model version that stays available",
+                       "met" if is_locked(get_path(m, "model.revision")) else "not_met",
+                       f"model.revision = {field_value(m, 'model.revision')}"))
+    items.append(_item(P1, "Model hosted on own infrastructure", "met", "self-run"))
     items.append(_item(P1, "Model choice explicitly argued", "met" if _known(m, "study.model_choice_rationale")
                        else "not_documented", "study.model_choice_rationale"))
     items.append(_item(P1, "Robustness across several models", "met" if _known(m, "study.models_compared")
@@ -139,7 +128,7 @@ def evaluate(m: dict) -> dict:
                            "no prompt available to check"))
 
     # 6. Parameters explicitly specified
-    keys = ["temperature", "top_p", "max_tokens"] + ([] if hosted else ["top_k"])
+    keys = ["temperature", "top_p", "max_tokens", "top_k"]
     unset = [k for k in keys if field_value(m, f"decoding.{k}") in UNSET_VALUES]
     items.append(_item(P6, "All parameters explicitly specified, even defaults",
                        "met" if not unset else "not_met",
@@ -152,8 +141,6 @@ def evaluate(m: dict) -> dict:
     eth = [("consent", "Consent / informing data subjects"), ("anonymization", "Anonymization or pseudonymization"),
            ("data_minimization", "Data minimization"), ("storage_and_transfer", "Storage and cross-border transfer"),
            ("copyright_and_tos", "Copyright and terms of service")]
-    if hosted:
-        eth.insert(1, ("data_processing_agreement", "Data processing agreement with the provider"))
     for key, req in eth:
         items.append(_item(P7, req, "met" if _known(m, f"ethics.{key}") else "not_documented", f"ethics.{key}"))
 

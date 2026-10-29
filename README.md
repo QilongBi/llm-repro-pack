@@ -7,8 +7,10 @@ Closed LLM APIs threaten reproducibility: models change behind stable aliases, g
 and run on stacks nobody outside the provider can inspect. Open models can be pinned
 exactly (weights commit, tokenizer and chat template, engine version, precision, decoding
 settings, hardware). Following Spirling (Nature, 2023) and Palmer, Smith & Spirling
-(Nature Computational Science, 2024), this skill targets open and open-weight models and
-treats hosted APIs as a degraded mode. Each package is also checked against the best
+(Nature Computational Science, 2024), this skill only handles open and open-weight models
+run on a machine the researcher controlled, and only builds packages that reach grade A
+or B. Runs through third-party hosted APIs, and runs whose critical settings cannot be
+pinned, are refused. Each package is also checked against the best
 practices for LLM text annotation in Törnberg (2024, arXiv:2402.05129): model choice,
 coding procedure, prompt codebook, validation, prompt structure, explicit parameters,
 ethics and law, stochasticity and training-data contamination.
@@ -23,7 +25,7 @@ depend on which agent or person runs it.
 ```
 manifest.yaml        every field: value + provenance label + source
 README.md            how to reproduce
-REPRODUCIBILITY.md   grade A-D, missing items, conflicts, caveats
+REPRODUCIBILITY.md   grade A or B, conflicts, caveats, what is missing for A
 BEST_PRACTICES.md    checklist against Törnberg (2024)
 PROMPT_CODEBOOK.md   categories, prompts, examples and settings in one document
 env/                 environment files, hardware info, rebuild instructions
@@ -42,13 +44,14 @@ checksums.sha256
 |---|---|---|
 | A | Fully open model, self-run, all critical fields locked | Bit-identical on the same hardware class |
 | B | Open-weight model, self-run, all critical fields locked | Bit-identical on the same hardware class |
-| C | Some critical fields missing, or hosted API mode | Statistical reproduction (agreement metrics) |
-| D | Only archived outputs available | Downstream analysis only |
+
+There are no lower grades. If a critical field stays unknown, unconfirmed or in conflict,
+`package.py` builds nothing and lists the fields to lock (exit code 3).
 
 ## Install
 
 Requires Python 3.9+ and PyYAML. Engines are optional and only needed to re-run:
-transformers, vLLM, Ollama, or any OpenAI-compatible hosted API.
+transformers, vLLM or Ollama.
 
 ```
 pip install -r requirements.txt
@@ -62,7 +65,7 @@ To use it as a Claude Code skill, copy or link this folder to `~/.claude/skills/
 S=path/to/llm-repro-pack/scripts
 python $S/discover.py --project study --labels outputs/labels.csv
 python $S/confirm.py select --project study labels=outputs/labels.csv data=data/items.csv prompt_files=prompt.yaml config=config.yaml logs=logs env_package=env
-python $S/collect_env.py --project study --model-id allenai/OLMo-2-1124-7B-Instruct --run-mode self_run
+python $S/collect_env.py --project study --model-id allenai/OLMo-2-1124-7B-Instruct
 python $S/confirm.py pending --project study
 python $S/confirm.py field --project study model.revision --as researcher_confirmed
 python $S/confirm.py practices --project study --file study/practices.yaml
