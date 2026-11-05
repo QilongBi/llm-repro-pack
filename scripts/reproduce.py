@@ -196,6 +196,10 @@ def main() -> int:
     info = json.loads((out / "run_info.json").read_text(encoding="utf-8"))
     hw_now = current_environment(False).get("accelerator", "unknown")
     diff = env_diff(m, {**current_versions(), **{k: v for k, v in info.get("versions", {}).items() if v}})
+    run_engine = field_value(m, "engine.name")
+    if run_engine and run_engine != "unknown" and args.engine not in (run_engine, "mock"):
+        diff.insert(0, f"engine: run {run_engine}, now {args.engine} (a different inference stack; "
+                       "identical output is not expected)")
     (out / "REPRODUCTION_REPORT.md").write_text(report(pkg, m, args, [], diff, metrics, hw_now),
                                                 encoding="utf-8", newline="\n")
     print(f"Exact match rate: {_fmt(metrics.get('exact_match_rate'))}, kappa: {_fmt(metrics.get('cohens_kappa'))}, "

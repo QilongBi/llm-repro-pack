@@ -109,3 +109,25 @@ def test_archive_weights_requires_permissive_license(tmp_path):
     do_collect(p, "meta-llama/Llama-3.1-8B-Instruct", hf)
     with pytest.raises(SystemExit):
         do_package(p, tmp_path / "pkg", archive_weights=True)
+
+
+def test_engine_without_adapter_gets_no_wrong_command(tmp_path):
+    p = _prepare_selfrun(tmp_path)
+    confirm_all(p, provided={"engine.name": "mlx", "model.training_code_commit": "allenai/OLMo@0123456789abcdef"})
+    res = do_package(p, tmp_path / "pkg")
+    assert res["grade"]["eligible"]
+    readme = (res["package"] / "README.md").read_text(encoding="utf-8")
+    assert "--engine transformers" not in readme
+    assert "No built-in adapter for the recorded engine 'mlx'" in readme
+    rep = (res["package"] / "REPRODUCIBILITY.md").read_text(encoding="utf-8")
+    assert "no built-in reproduction adapter" in rep
+    assert "MXFP4" not in rep  # OLMo package: no gpt-oss-specific wording
+
+
+def test_supported_engine_gets_its_command(tmp_path):
+    p = _prepare_selfrun(tmp_path)
+    confirm_all(p, provided={"model.training_code_commit": "allenai/OLMo@0123456789abcdef"})
+    res = do_package(p, tmp_path / "pkg")
+    readme = (res["package"] / "README.md").read_text(encoding="utf-8")
+    assert "python scripts/reproduce.py --package . --engine vllm" in readme
+    assert "no built-in reproduction adapter" not in (res["package"] / "REPRODUCIBILITY.md").read_text(encoding="utf-8")

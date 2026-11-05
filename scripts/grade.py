@@ -118,7 +118,7 @@ def grade(m: dict) -> dict:
     acc = field_value(m, "hardware.accelerator")
     notes = [f"Bit-identical results are expected only on the same hardware class ({acc or 'unknown'}) with "
              "the same engine version, precision and batch size. Other hardware (e.g. Apple Silicon vs "
-             "NVIDIA, or GPUs with and without MXFP4 support) gives statistical agreement only; judge it "
+             "NVIDIA, or GPUs with different kernel support for the weight format) gives statistical agreement only; judge it "
              "with Cohen's kappa and Krippendorff's alpha."]
     if field_value(m, "model.converted_or_quantized") is True:
         notes.append("Converted or quantized weights were used instead of the original release. Reproduce "

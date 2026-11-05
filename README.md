@@ -24,7 +24,8 @@ depend on which agent or person runs it.
 | Single-label and multi-label text classification | Generation, summarization, extraction, numeric scoring |
 | Fully open models (e.g. OLMo 2) and open-weight models (e.g. gpt-oss, Qwen, Llama) | Closed models (GPT-4, Claude, Gemini) |
 | Runs on a machine you controlled: local NVIDIA GPU, Apple Silicon, CPU, your own cloud VM or HPC node | Third-party hosted APIs (Groq, Together, OpenRouter, ...). Evidence collection stops with an error |
-| Engines: transformers, vLLM, Ollama (more can be added) | Chat web interfaces |
+| Any open or open-weight model; model-specific rules come from optional profiles, other models use the default profile | Chat web interfaces |
+| Re-running with transformers, vLLM or Ollama. Runs made with MLX, llama.cpp or SGLang can be packaged, but re-running them needs an adapter first (`docs/extending.md`) | Re-running an MLX, llama.cpp or SGLang run without adding an adapter |
 | Runs where every critical setting can be found in files or supplied by you | Runs whose critical settings are lost. No package is built (exit code 3) and the missing fields are listed |
 | Re-running a package (reproduce mode) and prompt-stability analysis | Repairing or improving labels; invalid outputs stay invalid |
 

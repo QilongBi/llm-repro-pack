@@ -27,16 +27,41 @@ def _short(v: Any, n: int = 80) -> str:
     return s if len(s) <= n else s[: n - 3] + "..."
 
 
+def reproduction_engines() -> tuple[str, ...]:
+    """Engines with a built-in reproduction adapter (the mock adapter is for tests only)."""
+    from adapters import BUILTIN
+    return tuple(e for e in BUILTIN if e != "mock")
+
+
+def engine_supported(m: dict) -> bool:
+    return field_value(m, "engine.name") in reproduction_engines()
+
+
+def no_adapter_note(m: dict) -> str:
+    eng = field_value(m, "engine.name")
+    return (f"The run used the engine '{eng}', which has no built-in reproduction adapter (built-in: "
+            f"{', '.join(reproduction_engines())}). The package is complete and verifiable, but re-running it "
+            f"needs an adapter for '{eng}': add scripts/adapters/<name>_adapter.py or point LLMRP_ADAPTER_PATH "
+            "at one (see docs/extending.md in llm-repro-pack). Re-running with a different engine is a "
+            "different inference stack: expect agreement, not identical output.")
+
+
 def reproduce_command(m: dict) -> str:
     eng = field_value(m, "engine.name")
-    eng = eng if eng in ("transformers", "vllm", "ollama") else "transformers"
-    return f"python scripts/reproduce.py --package . --engine {eng}"
+    if engine_supported(m):
+        return f"python scripts/reproduce.py --package . --engine {eng}"
+    return (f"# No built-in adapter for the recorded engine '{eng}'. Add one first\n"
+            f"   # (scripts/adapters/<name>_adapter.py or LLMRP_ADAPTER_PATH), then run it with:\n"
+            f"   python scripts/reproduce.py --package . --engine <name>")
 
 
 def expected(m: dict, g: dict) -> str:
-    return ("Re-running with the same engine version, precision, batch size and hardware class should "
+    text = ("Re-running with the same engine version, precision, batch size and hardware class should "
             "reproduce the archived raw outputs exactly (exact match rate 1.0). On different hardware "
             "expect high but imperfect agreement; judge it by Cohen's kappa and Krippendorff's alpha.")
+    if not engine_supported(m):
+        text += "\n\n" + no_adapter_note(m)
+    return text
 
 
 def readme(m: dict) -> str:
@@ -77,6 +102,8 @@ def reproducibility(m: dict) -> str:
     caveats = list(g["notes"]) + list(m.get("warnings") or [])
     prof = get_profile(field_value(m, "model_profile.name") or "default")
     caveats += prof.get("notes") or []
+    if not engine_supported(m):
+        caveats.append(no_adapter_note(m))
     if field_value(m, "model.openness") == "open_weight":
         caveats.append("Open-weight model: the training data is not disclosed, so data contamination and "
                        "training-time choices cannot be audited.")
